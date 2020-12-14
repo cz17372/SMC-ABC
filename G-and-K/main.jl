@@ -18,7 +18,7 @@ end
 
 true_par = [3.0,1.0,2.0,0.5];
 Random.seed!(123);
-data = Generate_Data(20,par=true_par,NoisyData=true,noise=0.5);
+z,data = Generate_Data(20,par=true_par,NoisyData=true,noise=0.5);
 
 """
 Generate an artificial data of size 20. Adding a Gaussian noise with mean 0 and standard deviation 0.5
@@ -68,3 +68,22 @@ p3 = PlotRes(Std_SMCABC_RES.P[:,param,t],New_SMCABC_RES.P[:,param,t],true_par[pa
 t = 1000;
 p4 = PlotRes(Std_SMCABC_RES.P[:,param,t],New_SMCABC_RES.P[:,param,t],true_par[param],lab[param],t);
 plot(p1,p2,p3,p4,layout=(2,2),size=(500,500))
+
+
+Mat = New_SMCABC_RES.P[:,:,end]
+
+NewMat = zeros(10000,20)
+for i = 1:10000
+    NewMat[i,:] = sort(Mat[i,5:end])
+end
+
+t = 
+density(NewMat[:,t]);vline!([sort(z)[t]])
+
+density(Mat[:,4])
+
+function d(x;y)
+    return sqrt(sum((sort(y).-sort(x)).^2))
+end
+
+@time ForwardDiff.gradient(x->d(x,y=data),Mat[1,5:end])

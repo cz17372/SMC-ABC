@@ -27,9 +27,9 @@ end
 function Generate_Data(N;par,NoisyData = false,noise=nothing)
     z = rand(Normal(0,1),N)
     if NoisyData
-        return Transform_Normal.(z,par=par) + rand(Normal(0,noise),N)
+        return (z,Transform_Normal.(z,par=par) + rand(Normal(0,noise),N))
     else
-        return Transform_Normal.(z,par=par)
+        return (z,Transform_Normal.(z,par=par))
     end
 end
 
