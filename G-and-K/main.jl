@@ -49,22 +49,22 @@ p4 = PlotRes(Std_SMCABC_RES.P[:,param,t],New_SMCABC_RES.P[:,param,t],true_par[pa
 plot(p1,p2,p3,p4,layout=(2,2),size=(500,500))
 
 
+Random.seed!(123);
 data = Generate_Data(20,par=true_par,NoisyData=false);
-New_SMCABC_RES = SMC(10000,1000,data,Threshold=0.8,NoisyData=false,Method = "New",scale=0.1);
+New_SMCABC_RES = SMC(10000,1000,data,Threshold=0.8,NoisyData=false,Method = "New",scale=0.05);
 Std_SMCABC_RES = SMC(10000,1000,data,Threshold=0.8,NoisyData=false,Method="Standard",scale=0.05);
 
 plot(log.(Std_SMCABC_RES.epsilon),label="Standard SMC-ABC")
 plot!(log.(New_SMCABC_RES.epsilon),label="New SMC-ABC")
 
-NewESS = zeros(Int64,1000)
-StdESS = zeros(Int64,1000)
+t = 50; lab = ["a","b","g","k"]; param = 1;
+p1 = PlotRes(Std_SMCABC_RES.P[:,param,t],New_SMCABC_RES.P[:,param,t],true_par[param],lab[param],t)
+t = 500;
+p2 = PlotRes(Std_SMCABC_RES.P[:,param,t],New_SMCABC_RES.P[:,param,t],true_par[param],lab[param],t);
 
-for i = 1:1000
-    NewESS[i] = length(findall(New_SMCABC_RES.W[:,i] .!= 0.0))
-    StdESS[i] = length(findall(Std_SMCABC_RES.W[:,i] .!= 0.0))
-end
+t = 800;
+p3 = PlotRes(Std_SMCABC_RES.P[:,param,t],New_SMCABC_RES.P[:,param,t],true_par[param],lab[param],t);
 
-plot(NewESS)
-plot!(StdESS)
-
-New_SMCABC_RES.epsilon
+t = 1000;
+p4 = PlotRes(Std_SMCABC_RES.P[:,param,t],New_SMCABC_RES.P[:,param,t],true_par[param],lab[param],t);
+plot(p1,p2,p3,p4,layout=(2,2),size=(500,500))
