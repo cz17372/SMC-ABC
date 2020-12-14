@@ -33,8 +33,6 @@ function Generate_Data(N;par,NoisyData = false,noise=nothing)
     end
 end
 
-
-
 function SMC(N,T,data;Criterion="ESS",Threshold=0.8,NoisyData=false,noise=nothing,Method="New",scale=0.05)
     """
     N            : The number of particles at each SMC step
