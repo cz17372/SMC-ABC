@@ -159,10 +159,3 @@ density!(R2.P[:,1,t])
 
 plot(log.(R.epsilon))
 plot!(log.(R2.epsilon))
-
-"""
-
-This  version only adds a lit bit of comments
-Add a few new lines....
-
-"""
