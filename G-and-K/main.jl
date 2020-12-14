@@ -36,15 +36,20 @@ Std_SMCABC_RES = SMC(10000,1000,data,Threshold=0.6,NoisyData=true,Method="Standa
 
 
 
-t = 200; lab = ["a","b","g","k"]; param = 1;
-p1 = PlotRes(Std_SMCABC_RES.P[:,param,t],New_SMCABC_RES.P[:,param,t],true_par[1],lab[param],t)
+t = 200; lab = ["a","b","g","k"]; param = 4;
+p1 = PlotRes(Std_SMCABC_RES.P[:,param,t],New_SMCABC_RES.P[:,param,t],true_par[param],lab[param],t);
 t = 500;
-p2 = PlotRes(Std_SMCABC_RES.P[:,param,t],New_SMCABC_RES.P[:,param,t],true_par[1],lab[param],t);
+p2 = PlotRes(Std_SMCABC_RES.P[:,param,t],New_SMCABC_RES.P[:,param,t],true_par[param],lab[param],t);
 
 t = 800;
-p3 = PlotRes(Std_SMCABC_RES.P[:,param,t],New_SMCABC_RES.P[:,param,t],true_par[1],lab[param],t);
+p3 = PlotRes(Std_SMCABC_RES.P[:,param,t],New_SMCABC_RES.P[:,param,t],true_par[param],lab[param],t);
 
 t = 1000;
-p4 = PlotRes(Std_SMCABC_RES.P[:,param,t],New_SMCABC_RES.P[:,param,t],true_par[1],lab[param],t);
+p4 = PlotRes(Std_SMCABC_RES.P[:,param,t],New_SMCABC_RES.P[:,param,t],true_par[param],lab[param],t);
 plot(p1,p2,p3,p4,layout=(2,2),size=(1000,1000))
-savefig("G-and-K/resplot.pdf")
+savefig("G-and-K/resplot2.pdf")
+
+
+data = Generate_Data(20,par=true_par,NoisyData=false);
+New_SMCABC_RES = SMC(10000,1000,data,Threshold=0.8,NoisyData=false,Method = "New",scale=0.01);
+Std_SMCABC_RES = SMC(10000,1000,data,Threshold=0.8,NoisyData=false,Method="Standard",scale=0.01);
