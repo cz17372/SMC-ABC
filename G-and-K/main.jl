@@ -30,13 +30,13 @@ performed.
 
 """
 
-New_SMCABC_RES = SMC(10000,1000,data,Criterion="ESS",Threshold=0.9,NoisyData=true,Method ="New",noise=1.5,scale=0.05);
-Std_SMCABC_RES = SMC(10000,1000,data,Criterion="Unique",Threshold=0.8,NoisyData=true,Method="Standard",noise=1.5,scale=0.05);
+New_SMCABC_RES = SMC(10000,1000,data,Criterion="ESS",Threshold=0.6,NoisyData=true,Method ="New",noise=1.5,scale=0.05);
+Std_SMCABC_RES = SMC(10000,1000,data,Criterion="ESS",Threshold=0.6,NoisyData=true,Method="Standard",noise=1.5,scale=0.05);
 
 
 
 
-t = 100; lab = ["a","b","g","k"]; param = 4;
+t = 100; lab = ["a","b","g","k"]; param = 3;
 p1 = PlotRes(Std_SMCABC_RES.P[:,param,t],New_SMCABC_RES.P[:,param,t],true_par[param],lab[param],t)
 t = 500;
 p2 = PlotRes(Std_SMCABC_RES.P[:,param,t],New_SMCABC_RES.P[:,param,t],true_par[param],lab[param],t);
@@ -57,15 +57,15 @@ Std_SMCABC_RES = SMC(10000,1000,data,Threshold=0.8,NoisyData=false,Method="Stand
 plot(log.(Std_SMCABC_RES.epsilon),label="Standard SMC-ABC")
 plot!(log.(New_SMCABC_RES.epsilon),label="New SMC-ABC")
 
-t = 100; lab = ["a","b","g","k"]; param = 4;
+t = 100; lab = ["a","b","g","k"]; param = 1;
 p1 = PlotRes(Std_SMCABC_RES.P[:,param,t],New_SMCABC_RES.P[:,param,t],true_par[param],lab[param],t)
-t = 500;
+t = 300;
 p2 = PlotRes(Std_SMCABC_RES.P[:,param,t],New_SMCABC_RES.P[:,param,t],true_par[param],lab[param],t);
 
-t = 800;
+t = 500;
 p3 = PlotRes(Std_SMCABC_RES.P[:,param,t],New_SMCABC_RES.P[:,param,t],true_par[param],lab[param],t);
 
-t = 1000;
+t = 700;
 p4 = PlotRes(Std_SMCABC_RES.P[:,param,t],New_SMCABC_RES.P[:,param,t],true_par[param],lab[param],t);
 plot(p1,p2,p3,p4,layout=(2,2),size=(500,500))
 
@@ -87,3 +87,6 @@ function d(x;y)
 end
 
 @time ForwardDiff.gradient(x->d(x,y=data),Mat[1,5:end])
+
+t = 850; lab = ["a","b","g","k"]; param = 4;
+PlotRes(Std_SMCABC_RES.P[:,param,t],New_SMCABC_RES.P[:,param,t],true_par[param],lab[param],t)
