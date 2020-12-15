@@ -50,14 +50,14 @@ plot(p1,p2,p3,p4,layout=(2,2),size=(500,500))
 
 
 Random.seed!(123);
-data = Generate_Data(20,par=true_par,NoisyData=false);
-New_SMCABC_RES = SMC(10000,1000,data,Threshold=0.8,NoisyData=false,Method = "New",scale=0.05);
-Std_SMCABC_RES = SMC(10000,1000,data,Threshold=0.8,NoisyData=false,Method="Standard",scale=0.05);
+z,data = Generate_Data(20,par=true_par,NoisyData=false);
+New_SMCABC_RES = SMC(10000,1000,data,Threshold=0.8,NoisyData=false,Method = "New",scale=0.02);
+Std_SMCABC_RES = SMC(10000,1000,data,Threshold=0.8,NoisyData=false,Method="Standard",scale=0.02);
 
 plot(log.(Std_SMCABC_RES.epsilon),label="Standard SMC-ABC")
 plot!(log.(New_SMCABC_RES.epsilon),label="New SMC-ABC")
 
-t = 50; lab = ["a","b","g","k"]; param = 1;
+t = 100; lab = ["a","b","g","k"]; param = 4;
 p1 = PlotRes(Std_SMCABC_RES.P[:,param,t],New_SMCABC_RES.P[:,param,t],true_par[param],lab[param],t)
 t = 500;
 p2 = PlotRes(Std_SMCABC_RES.P[:,param,t],New_SMCABC_RES.P[:,param,t],true_par[param],lab[param],t);
