@@ -18,7 +18,7 @@ end
 
 true_par = [3.0,1.0,2.0,0.5];
 Random.seed!(123);
-z,data = Generate_Data(20,par=true_par,NoisyData=true,noise=0.5);
+z,data = Generate_Data(20,par=true_par,NoisyData=true,noise=1.5);
 
 """
 Generate an artificial data of size 20. Adding a Gaussian noise with mean 0 and standard deviation 0.5
@@ -30,8 +30,8 @@ performed.
 
 """
 
-New_SMCABC_RES = SMC(10000,1000,data,Criterion="Unique",Threshold=0.8,NoisyData=true,Method = "New",noise=0.5,scale=0.05);
-Std_SMCABC_RES = SMC(10000,1000,data,Criterion="Unique",Threshold=0.8,NoisyData=true,Method="Standard",noise=0.5,scale=0.05);
+New_SMCABC_RES = SMC(10000,1000,data,Criterion="ESS",Threshold=0.9,NoisyData=true,Method ="New",noise=1.5,scale=0.05);
+Std_SMCABC_RES = SMC(10000,1000,data,Criterion="Unique",Threshold=0.8,NoisyData=true,Method="Standard",noise=1.5,scale=0.05);
 
 
 
