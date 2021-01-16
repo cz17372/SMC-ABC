@@ -37,20 +37,17 @@ function logPrior(ξ)
     z = ξ[5:end]
     return sum(logpdf.(Uniform(0,10),θ)) + sum(logpdf.(Normal(0,1),z))
 end
-function LocalMH(ξ0,Σ,ϵ;Method="RW",sigma=σ)
+
+function LocalMH(ξ0,Σ,ϵ;Method=Method,sigma=σ)
     if Method == "RW" # A random walk proposal is used in this case
         newξ = rand(MultivariateNormal(ξ0,sigma^2*Σ))
         prior_ratio = logPrior(newξ) - logPrior(ξ0)
-        logα = min(0,prior_ratio + log(dist(φ(newξ))<ϵ))
+        logα = min(0,prior_ratio+log(dist(newξ)<ϵ))
         u = rand(Uniform(0,1))
-        if log(u) > prior_ratio
-            return ξ0
+        if log(u) < logα
+            return (newξ,exp(logα))
         else
-            if dist(newξ) < ϵ
-                return newξ
-            else
-                return ξ0
-            end
+            return (ξ0,exp(logα))
         end
     end
     if Method == "Langevin"
@@ -60,14 +57,11 @@ function LocalMH(ξ0,Σ,ϵ;Method="RW",sigma=σ)
         u = rand(Uniform(0,1))
         prop_ratio = logpdf(backward_distr,ξ0) - logpdf(forward_distr,newξ)
         prior_ratio = logPrior(newξ) - logPrior(ξ0)
-        if log(u) > prop_ratio + prior_ratio
-            return ξ0
+        logα = min(0,prop_ratio+prior_ratio+log(dist(newξ)<ϵ))
+        if log(u) < logα
+            return (newξ,exp(logα))
         else
-            if dist(newξ) < ϵ
-                return newξ
-            else
-                return ξ0
-            end
+            return (ξ0,exp(logα))
         end
     end
 end
