@@ -1,140 +1,166 @@
+using Flux, Distributions
+using Flux: params
+using Random, StatsPlots, Plots
+using LinearAlgebra
+using ProgressMeter
 
+function f(z,θ)
+    return θ[1] + θ[2]*(1+0.8*((1-exp(-θ[3]*z))/(1+exp(-θ[3]*z))))*(1+z^2)^θ[4]*z
+end 
 
-
-function Transform_Normal(z;par)
-    # Define the G-and-K model using standar Normal distributions
-    return par[1] + par[2]*(1+0.8*(1-exp(-par[3]*z))/(1+exp(-par[3]*z)))*((1+z^2)^par[4])*z
+function φ(ξ)
+    θ = ξ[1:4]
+    z = ξ[5:end]
+    return f.(z,Ref(θ))
 end
 
-
-function inverse(x;par)
-    f(z) = Transform_Normal(z,par=par)-x
-    upp = 0.0; low = 0.0;
-    while f(upp)*f(low)>0
-        upp += 1.0
-        low -= 1.0
-    end
-    return fzero(f,(low,upp))
+function unit(x)
+    return x / norm(x)
 end
 
+θ0 = [3.0,1.0,2.0,0.5];
+Random.seed!(123);
+z0 = rand(Normal(0,1),20);
+y0 = φ([θ0;z0]);
 
-function grad(z;par)
-    ForwardDiff.derivative(x->Transform_Normal(x,par=par),z)
+function unit(x)
+    return x / norm(x)
 end
 
-
-
-function Generate_Data(N;par,NoisyData = false,noise=nothing)
-    z = rand(Normal(0,1),N)
-    if NoisyData
-        return (z,Transform_Normal.(z,par=par) + rand(Normal(0,noise),N))
-    else
-        return (z,Transform_Normal.(z,par=par))
-    end
+function dist(ξ;y=y0)
+    x = φ(ξ)
+    return norm(y .- x)
 end
 
-function SMC(N,T,data;Criterion="ESS",Threshold=0.8,NoisyData=false,noise=nothing,Method="New",scale=0.05)
-    """
-    N            : The number of particles at each SMC step
-    T            : Number of SMC steps
-    data         : The observations of the (noisy) g-and-k distributions
-    Criterion    : The criterion used to choose the next temperature (i.e. ϵ_{t+1}) 
-    """
-    """
-    Method == "New" implements the new SMC-ABC method. Instead of making purtabations on the 
-    static paramters only and generating a new set of hidden states, the new method make 
-    purtabations on both the static parameters and hidden states at each iteration
-    """
-    ϵ = zeros(T+1);
-    # Define a matrix storing the weights
-    W = zeros(N,T+1);
-    # Define a matrix storing the ancestors
-    A = zeros(Int,N,T);
-    Distance  = zeros(N,T+1);
-
-    if Method == "New"
-        Particles = zeros(N,4+length(data),T+1);
-    elseif Method == "Standard"
-        Particles = zeros(N,4,T+1);
-    end
-    function dist(y,x)
-        return sqrt(sum((sort(y) .- sort(x)).^2))
-    end
-    function f(xi;NoisyData,noise,Method,data)
-        if Method == "New"
-            par = xi[1:4]
-            z   = xi[5:end]
-            if NoisyData
-                return Transform_Normal.(z,par=par) + rand(Normal(0,noise),length(z))
-            else
-                return Transform_Normal.(z,par=par)
-            end
-        elseif Method == "Standard"
-            par = xi
-            z   = rand(Normal(0,1),length(data))
-            if NoisyData
-                return Transform_Normal.(z,par=par) + rand(Normal(0,noise),length(z))
-            else
-                return Transform_Normal.(z,par=par)
-            end
-        end
-    end
-    function logPrior(xi;Method)
-        if Method == "New"
-            logparam = sum(logpdf.(Uniform(0,10),xi[1:4]))
-            logz     = sum(logpdf.(Normal(0,1),xi[5:end]))
-            return logparam + logz
-        elseif Method == "Standard"
-            logparam = sum(logpdf.(Uniform(0,10),xi[1:4]))
-            return logparam
-        end
-    end
-    function LocalMH(xi0,covariance,epsilon,y;Method,data)
-        # sample the new candidate xi according to a random walk kernel
-        newxi = rand(MultivariateNormal(xi0,covariance))
-        # sample a Uniform(0,1) RV
+function logPrior(ξ)
+    θ = ξ[1:4]
+    z = ξ[5:end]
+    return sum(logpdf.(Uniform(0,10),θ)) + sum(logpdf.(Normal(0,1),z))
+end
+function LocalMH(ξ0,Σ,ϵ;Method="RW",sigma=σ)
+    if Method == "RW" # A random walk proposal is used in this case
+        newξ = rand(MultivariateNormal(ξ0,sigma^2*Σ))
+        prior_ratio = logPrior(newξ) - logPrior(ξ0)
+        logα = min(0,prior_ratio + log(dist(φ(newξ))<ϵ))
         u = rand(Uniform(0,1))
-        if log(u) >= logPrior(newxi,Method=Method)-logPrior(xi0,Method=Method)
-            return xi0
+        if log(u) > prior_ratio
+            return ξ0
         else
-            x = f(newxi,NoisyData=NoisyData,noise=noise,Method = Method,data=data)
-            if dist(y,x) < epsilon
-                return newxi
+            if dist(newξ) < ϵ
+                return newξ
             else
-                return xi0
+                return ξ0
             end
         end
     end
-        
-    t = 0
-    for n = 1:N
-        if Method == "New"
-            Particles[n,:,t+1] = [rand(Uniform(0,10),4);rand(Normal(0,1),length(data))]
-        elseif Method == "Standard"
-            Particles[n,:,t+1] = rand(Uniform(0,10),4)
+    if Method == "Langevin"
+        forward_distr = MultivariateNormal(ξ0 .- sigma^2 * unit(gradient(dist,ξ0)[1]),sigma^2*Σ)
+        newξ  = rand(forward_distr)
+        backward_distr = MultivariateNormal(newξ .- sigma^2 * unit(gradient(dist,newξ)[1]),sigma^2*Σ)
+        u = rand(Uniform(0,1))
+        prop_ratio = logpdf(backward_distr,ξ0) - logpdf(forward_distr,newξ)
+        prior_ratio = logPrior(newξ) - logPrior(ξ0)
+        if log(u) > prop_ratio + prior_ratio
+            return ξ0
+        else
+            if dist(newξ) < ϵ
+                return newξ
+            else
+                return ξ0
+            end
         end
-        Distance[n,t+1]    = dist(data,f(Particles[n,:,t+1],NoisyData=NoisyData,noise=noise,Method=Method,data=data))
     end
-    ϵ[t+1] = findmax(Distance[:,t+1])[1]
-    # Since we are sampling all the particles from prior, all the particles will have equal weights
+end
+
+function NewSMC(N,T,data;Method = "RW", Threshold=0.8, σ = 0.3)
+    function f(z,θ)
+        return θ[1] + θ[2]*(1+0.8*((1-exp(-θ[3]*z))/(1+exp(-θ[3]*z))))*(1+z^2)^θ[4]*z
+    end 
+    
+    function φ(ξ)
+        θ = ξ[1:4]
+        z = ξ[5:end]
+        return f.(z,Ref(θ))
+    end
+
+    function unit(x)
+        return x / norm(x)
+    end
+
+    function dist(ξ;y=data)
+        x = φ(ξ)
+        return norm(y .- x)
+    end
+
+    function logPrior(ξ)
+        θ = ξ[1:4]
+        z = ξ[5:end]
+        return sum(logpdf.(Uniform(0,10),θ)) + sum(logpdf.(Normal(0,1),z))
+    end
+
+    function LocalMH(ξ0,Σ,ϵ;Method=Method,sigma=σ)
+        if Method == "RW" # A random walk proposal is used in this case
+            newξ = rand(MultivariateNormal(ξ0,sigma^2*Σ))
+            prior_ratio = logPrior(newξ) - logPrior(ξ0)
+            logα = min(0,prior_ratio+log(dist(newξ)<ϵ))
+            u = rand(Uniform(0,1))
+            if log(u) < logα
+                return (newξ,exp(logα))
+            else
+                return (ξ0,exp(logα))
+            end
+        end
+        if Method == "Langevin"
+            forward_distr = MultivariateNormal(ξ0 .- sigma^2 * unit(gradient(dist,ξ0)[1]),sigma^2*Σ)
+            newξ  = rand(forward_distr)
+            backward_distr = MultivariateNormal(newξ .- sigma^2 * unit(gradient(dist,newξ)[1]),sigma^2*Σ)
+            u = rand(Uniform(0,1))
+            prop_ratio = logpdf(backward_distr,ξ0) - logpdf(forward_distr,newξ)
+            prior_ratio = logPrior(newξ) - logPrior(ξ0)
+            logα = min(0,prop_ratio+prior_ratio+log(dist(newξ)<ϵ))
+            if log(u) < logα
+                return (newξ,exp(logα))
+            else
+                return (ξ0,exp(logα))
+            end
+        end
+    end
+
+    ϵ = zeros(T+1);
+    W = zeros(N,T+1);
+    A = zeros(Int64,N,T+1);
+    D = zeros(N,T+1)
+    P = zeros(N,4+length(data),T+1);
+    t = 0;
+    acc_mat = zeros(N,T);
+    for n = 1:N
+        P[n,:,t+1] = [rand(Uniform(0,10),4);rand(Normal(0,1),length(data))]
+        D[n,t+1] = dist(P[n,:,t+1])
+    end
+    ϵ[t+1] = findmax(D[:,t+1])[1]
     W[:,t+1] .= 1/N;
     @showprogress 1 "Computing..." for t = 1:T
         A[:,t] = vcat(fill.(1:N,rand(Multinomial(N,W[:,t])))...)
-        if Criterion == "ESS"
-            ϵ[t+1] = sort(Distance[A[:,t],t])[floor(Int,Threshold*N)]
-        elseif Criterion == "Unique"
-            UniqueDist = sort(unique(Distance[A[:,t],t]))
-            ϵ[t+1] = UniqueDist[floor(Int,Threshold*length(UniqueDist))]
-        end
-        # print("iteration",t,"ϵ",ϵ[t+1],"\n")
-        W[:,t+1] = (Distance[:,t] .< ϵ[t+1])/sum(Distance[:,t] .< ϵ[t+1])
-        #sigma = diagm(diag(cov(Particles[:,:,t])))
-        sigma = scale*cov(Particles[A[:,t],:,t])
+        ϵ[t+1] = sort(D[A[:,t],t])[floor(Int64,Threshold*N)]
+        W[:,t+1] = (D[:,t] .< ϵ[t+1])/sum(D[:,t] .< ϵ[t+1])
+        #Σ = cov(P[A[:,t],:,t])
+        Σ = 1.0 * I;
         for n = 1:N
-            Particles[n,:,t+1] = LocalMH(Particles[A[n,t],:,t],sigma,ϵ[t+1],data,Method=Method,data=data)
-            Distance[n,t+1] = dist(data,f(Particles[n,:,t+1],NoisyData=NoisyData,noise=noise,Method=Method,data=data))
+            xi,alpha = LocalMH(P[A[n,t],:,t],Σ,ϵ[t+1],Method=Method)
+            P[n,:,t+1] = xi
+            acc_mat[n,t] = alpha
+            D[n,t+1] = dist(P[n,:,t+1])
         end
     end
-    return (P=Particles,W=W,A=A,epsilon=ϵ,D=Distance)
+    return (P=P,W=W,A=A,epsilon=ϵ,D=D,α = acc_mat)
 end
 
+R = NewSMC(10000,500,y0,Method = "Langevin",σ=0.05)
+R2 = NewSMC(10000,500,y0,σ = 0.1)
+plot(mean(R.α,dims=1)[1,:],xlabel="Iteration",ylabel="Average acceptance probability",label="Langevin Update")
+plot!(mean(R2.α,dims=1)[1,:],label="RW")
+
+
+
+plot(log.(R.epsilon))
+plot!(log.(R2.epsilon))
