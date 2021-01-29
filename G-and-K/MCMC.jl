@@ -1,0 +1,73 @@
+using Plots, StatsPlots
+using Distributions
+using ForwardDiff: derivative
+using Roots
+using ForwardDiff: gradient
+using LinearAlgebra
+using ProgressMeter
+using Random
+
+@everywhere using Distributions, Roots, LinearAlgebra, Random
+@everywhere using ForwardDiff: derivative
+
+@everywhere function f(z;θ)
+    return θ[1] + θ[2]*(1+0.8*((1-exp(-θ[3]*z))/(1+exp(-θ[3]*z))))*(1+z^2)^θ[4]*z
+end
+@everywhere function invz(x;g)
+    lower=0.0
+    upper= 0.0
+    while (g(lower)-x)*(g(upper)-x) >= 0
+        lower -= 1
+        upper += 1
+    end
+    return find_zero(z->g(z)-x,(lower,upper))
+end
+@everywhere function gkpdf(θ;x)
+    g(x) = f(x,θ=θ)
+    z = invz.(x,g=g)
+    return sum(log.(pdf.(Normal(0,1),z) ./ abs.(derivative.(Ref(g),z))))
+end
+@everywhere logPrior(θ) = sum(logpdf.(Uniform(0,10),θ))
+
+
+Random.seed!(123);
+θ0 = [3.0,1.0,2.0,0.5];
+y0 = f.(rand(Normal(0,1),20),θ=θ0)
+
+
+
+function MCMC(N,y0,init_theta,cov_proposal)
+    ThetaMat = zeros(N,length(init_theta))
+    ThetaMat[1,:] = init_theta
+    llk(θ) = gkpdf(θ,x=y0)
+    @showprogress 1 "Computing..." for t = 2:N
+        theta_star = rand(MultivariateNormal(ThetaMat[t-1,:],0.5^2*cov_proposal))
+        logalpha = min(0,logPrior(theta_star)-logPrior(ThetaMat[t-1,:])+llk(theta_star)-llk(ThetaMat[t-1,:]))
+        logu = log(rand(Uniform(0,1)))
+        if logu < logalpha
+            ThetaMat[t,:] = theta_star
+        else
+            ThetaMat[t,:] = ThetaMat[t-1,:]
+        end
+    end
+    return ThetaMat
+end
+
+
+
+N = 100000
+init_theta = rand(Uniform(0,10),4)
+
+R = MCMC(100000,y0,init_theta,cov_proposal)
+
+
+using Distributed, SharedArrays
+
+a = SharedArray{Float64}(2,2,2)
+
+using JLD2, FileIO
+
+@save "try.jld2" R
+
+@everywhere a = load("try.jld2","R")
+
