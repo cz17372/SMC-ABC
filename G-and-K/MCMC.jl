@@ -22,7 +22,7 @@ function MCMC(N,y0,init_theta,cov_proposal)
     ThetaMat = zeros(N,length(init_theta))
     ThetaMat[1,:] = init_theta
     llk(θ) = gkpdf(θ,x=y0)
-    @showprogress 1 "Computing..." for t = 2:N
+    for t = 2:N
         theta_star = rand(MultivariateNormal(ThetaMat[t-1,:],0.5^2*cov_proposal))
         logalpha = min(0,logPrior(theta_star)-logPrior(ThetaMat[t-1,:])+llk(theta_star)-llk(ThetaMat[t-1,:]))
         logu = log(rand(Uniform(0,1)))
