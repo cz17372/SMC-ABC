@@ -239,7 +239,7 @@ function SMC_RW(N,T,y;Threshold,rang)
     ϵ       = zeros(T+1);
     α       = zeros(T);
     SVec    = zeros(T);
-    d(ξ)    = log(norm(φ(ξ) .- y));
+    d(ξ)    = norm(φ(ξ) .- y);
 
     for i = 1:N
         P[i,:,1] = [rand(Uniform(0,10),4);rand(Normal(0,1),C)]
@@ -251,7 +251,11 @@ function SMC_RW(N,T,y;Threshold,rang)
 
     @showprogress 1 "Computing..." for t = 1:T
         A[:,t] = vcat(fill.(1:N,rand(Multinomial(N,W[:,t])))...);
-        ϵ[t+1] = quantile(D[:,t],Threshold);
+        if length(unique(D[:,t]))<500
+            ϵ[t+1] = ϵ[t]
+        else
+            ϵ[t+1] = sort(unique(D[:,t]))[500]
+        end
         W[:,t+1] = (D[A[:,t],t] .< ϵ[t+1])/sum(D[A[:,t],t] .< ϵ[t+1])
         Σ = cov(P[A[:,t],:,t]);
         #Σ = I;

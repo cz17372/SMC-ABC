@@ -1,7 +1,4 @@
-θ0 = [3.0,1.0,2.0,0.5];
-Random.seed!(123);
-z0 = rand(Normal(0,1),20);
-y0 = φ([θ0;z0]);
+
 R = SMC_Langevin(1000,100,y0, Threshold=0.8, s0=[0.3,0.3])
 
 meanjump(x) = mean(x[findall(x .>0)])
