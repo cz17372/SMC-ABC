@@ -63,3 +63,25 @@ boxplot(R.Particles[:,4,end],label="Langevin")
 boxplot!(R2.Particles[:,4,end],label="RW")
 
 plot(log.(abs.(R.OptimalScale[:,1])))
+
+N = 1000;
+d(ξ) = norm(φ(ξ) .- y0)
+grad(ξ) = gradient(d,ξ)[1]
+P = zeros(1000,24,100);
+D = zeros(1000,100);
+W = zeros(1000,101);
+A = zeros(Int64,1000,100);
+ϵ = zeros(101);
+for i = 1:1000
+    P[i,:,1] = [rand(Uniform(0,10),4);rand(Normal(0,1),20)]
+end
+
+D[:,1] = mapslices(d,P[:,:,1],dims=2)[:,1]
+ϵ[1] = findmax(D[:,1])[1]
+W[:,1] .= 1/1000
+t = 1
+A[:,t] = vcat(fill.(1:N,rand(Multinomial(N,W[:,t])))...);
+
+GradP = mapslices(grad,P[:,:,1],dims=2)
+
+mapslices(norm,GradP,dims=2)

@@ -3,9 +3,6 @@ using Distributed, SharedArrays
 addprocs(30)
 
 @everywhere include("MCMC.jl")
-
-@fetchfrom 2 InteractiveUtils.varinfo()
-
 @everywhere @load "data.jld2" y0
 @everywhere @load "cov.jld2" cov_proposal
 
@@ -17,5 +14,13 @@ R = SharedArray{Float64}(100000,4,50)
 end
 
 
+
+using FileIO
+R = load("/Users/changzhang/OneDrive - University of Bristol/Desktop/Tim/MCMC_Result_20Obs.jld2")
+
+R = R["R"]
+
+t = 2
+plot(R[:,t,1]);plot!(R[:,t,2]);plot!(R[:,t,3]);plot!(R[:,t,4]);plot!(R[:,t,5])
 
 

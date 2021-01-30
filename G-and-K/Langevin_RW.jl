@@ -1,5 +1,5 @@
 using Distributions, Plots, StatsPlots, Random, Optim
-using ForwardDiff: gradient,gradient!
+using Flux: gradient
 using ForwardDiff: derivative
 using ProgressMeter
 using LinearAlgebra
@@ -141,8 +141,8 @@ function SMC_Langevin(N,T,y;Threshold,s0)
 
 
 
-    d(ξ)    = log(norm(φ(ξ) .- y));
-    grad(ξ) = normalize(gradient(d,ξ));
+    d(ξ)    = norm(φ(ξ) .- y);
+    grad(ξ) = gradient(d,ξ);
     
     # The particles at the 0-th step of the SMC are sampled from 
     # the prior
@@ -264,5 +264,6 @@ function SMC_RW(N,T,y;Threshold,rang)
     end
     return (Particles = P, Ancestors = A, Weights = W, Epsilon = ϵ, JumpDistance = JumpD, Distance = D, AcceptancePortion = α, OptimalScale=SVec)
 end
+
 
 
