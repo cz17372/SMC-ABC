@@ -1,73 +1,76 @@
-using Flux:gradient
-using ProgressMeter, Distributions, LinearAlgebra
-using JLD2
+N = 10000; T = 100; NoData = 20; CoolingSchedule = 0.5; σ = 0.1; λ = 0.5; K = 10
 
-f(z;θ) = θ[1] + θ[2]*(1+0.8*(1-exp(-θ[3]*z))/(1+exp(-θ[3]*z)))*(1+z^2)^θ[4]*z;
+XI       = zeros(4+NoData,N,T+1);
+EPSILON  = zeros(T+1);
+DISTANCE = zeros(N,T+1);
+WEIGHT   = zeros(N,T+1);
+ANCESTOR = zeros(Int,N,T);
+for i = 1:N
+    XI[:,i,1] = [rand(Uniform(0,10),4);rand(Normal(0,1),NoData)]
+    DISTANCE[i,1] = RW_Dist(XI[:,i,1])
+end
 
-@load "/Users/changzhang/Documents/GitHub/SMC-ABC/G-and-K/data.jld2" y0
+error_deduction = zeros(T+1)
+SIGMA    = zeros(T+1)
+SIGMA[1] = σ
+ACCEPTANCE = zeros(T)
+WEIGHT[:,1] .= 1/N;
+EPSILON[1]  = findmax(DISTANCE[:,1])[1]
 
-ystar = y0;
+error_deduction[1] = EPSILON[1]
 
-Langevin_logPrior(ξ) = sum(logpdf.(Uniform(0,10),ξ[1:4]))+sum(logpdf.(Normal(0,1),ξ[5:end]))
+t = 5
 
-Langevin_Dist(ξ) = norm(f.(ξ[5:end],θ=ξ[1:4]) .- ystar)
-grad(ξ) = normalize(gradient(Langevin_Dist,ξ)[1])
-function Langevin_SMC_ABC_LocalMH(ξ0,ϵ;Σ,σ)
-    newξ = rand(MultivariateNormal(ξ0 .- σ/2*Σ*grad(ξ0),σ*Σ))
-    forward_proposal_density = logpdf(MultivariateNormal(ξ0 .- σ/2*Σ*grad(ξ0),σ*Σ),newξ)
-    backward_proposal_density = logpdf(MultivariateNormal(newξ .- σ/2*Σ* grad(newξ),σ*Σ),ξ0)
-    log_propose_ratio = backward_proposal_density - forward_proposal_density
-    logPrior_ratio = Langevin_logPrior(newξ)-Langevin_logPrior(ξ0)
-    u = log(rand(Uniform(0,1)))
-    if u >= logPrior_ratio + log_propose_ratio
-        return (ξ0,0,log_propose_ratio,logPrior_ratio)
-    else
-        if Langevin_Dist(newξ) < ϵ
-            return (newξ,1,log_propose_ratio,logPrior_ratio)
-        else
-            return (newξ,0,log_propose_ratio,logPrior_ratio)
-        end
+error_deduction[t+1] = min(error_deduction[t],CoolingSchedule*EPSILON[t])
+EPSILON[t+1] = EPSILON[t] - error_deduction[t+1]
+ANCESTOR[:,t] = collect(1:N)
+for i = 1:N
+    WEIGHT[i,t+1] = WEIGHT[i,t] * (RW_Dist(XI[:,ANCESTOR[i,t],t])<EPSILON[t+1])
+end
+
+while length(findall(WEIGHT[:,t+1].>0))<Int(0.3*N)
+    error_deduction[t+1] = CoolingSchedule*error_deduction
+    EPSILON[t+1] = EPSILON[t] - error_deduction[t+1]
+    for i = 1:N
+        WEIGHT[i,t+1] = WEIGHT[i,t] * (RW_Dist(XI[:,ANCESTOR[i,t],t])<EPSILON[t+1])
     end
 end
 
-function Langevin_SMC_ABC(N,T,NoData,Threshold,σ,λ)
-    XI       = zeros(4+NoData,N,T+1);
-    EPSILON  = zeros(T+1);
-    DISTANCE = zeros(N,T+1);
-    WEIGHT   = zeros(N,T+1);
-    ANCESTOR = zeros(Int,N,T);
-    LOGPROPOSAL = zeros(N,T);
-    LOGPRIOR = zeros(N,T)
-    for i = 1:N
-        XI[:,i,1] = [rand(Uniform(0,10),4);rand(Normal(0,1),NoData)]
-        DISTANCE[i,1] = Langevin_Dist(XI[:,i,1])
-    end
-    SIGMA    = zeros(T+1)
-    SIGMA[1] = σ
-    ACCEPTANCE = zeros(T)
-    WEIGHT[:,1] .= 1/N;
-    EPSILON[1]  = findmax(DISTANCE[:,1])[1]
-    
-    @showprogress 1 "Computing.." for t = 1:T
-        accepted = 0
-        ANCESTOR[:,t] = vcat(fill.(1:N,rand(Multinomial(N,WEIGHT[:,t])))...);
-        if length(unique(DISTANCE[:,t]))<Int(Threshold*N)
-            EPSILON[t+1] = EPSILON[t]
-        else
-            EPSILON[t+1] = sort(unique(DISTANCE[:,t]))[Int(Threshold*N)]
+WEIGHT[:,t+1] = WEIGHT[:,t+1]/sum(WEIGHT[:,t+1])
+if length(findall(WEIGHT[:,t+1].>0))<Int(0.5*N)
+    ANCESTOR[:,t] = vcat(fill.(1:N,rand(Multinomial(N,WEIGHT[:,t])))...);
+    WEIGHT[:,t+1] .= 1/N
+end
+Σ = cov(XI[:,findall(WEIGHT[:,t].>0),t],dims=2)
+accepted = zeros(N)
+proposed = zeros(N)
+Threads.@threads for i = 1:N
+    print(i,"\n")
+    global accepted,proposed
+    XI[:,i,t+1],acc = RW_SMC_ABC_LocalMH(XI[:,ANCESTOR[i,t],t],EPSILON[t+1],Σ=Σ,σ=SIGMA[t],K=K)
+    accepted[i] = acc
+    proposed[i] = K
+    DISTANCE[i,t+1] = RW_Dist(XI[:,i,t+1])
+end
+
+SIGMA[t+1] = exp(log(SIGMA[t]) + λ*(accepted-0.234))
+ACCEPTANCE[t] = accepted
+
+
+function SysResamp(W)
+    N = length(W)
+    u = rand(Uniform(0,1))
+    W1 = W ./ sum(W)
+    vvec = N*cumsum(W1)
+    s = u
+    m = 1
+    A = zeros(N)
+    for n = 1:N
+        while vvec[m] < s
+            m += 1
+            s += 1
         end
-        WEIGHT[:,t+1] = (DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1])/sum(DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1])
-        Σ = cov(XI[:,findall(WEIGHT[:,t].>0),t],dims=2) + 1e-8*I
-        Threads.@threads for i = 1:N
-            newξ,dec,logprop,logprior= Langevin_SMC_ABC_LocalMH(XI[:,ANCESTOR[i,t],t],EPSILON[t+1],Σ=Σ,σ=SIGMA[t])
-            accepted += dec
-            XI[:,i,t+1] = newξ;
-            LOGPROPOSAL[i,t] = logprop
-            LOGPRIOR[i,t]    = logprior
-            DISTANCE[i,t+1] = Langevin_Dist(XI[:,i,t+1])
-        end
-        SIGMA[t+1] = exp(log(SIGMA[t]) + λ*(accepted/N-0.45))
-        ACCEPTANCE[t] = accepted/N
+        A[n] = m
     end
-    return (XI=XI,DISTANCE=DISTANCE,WEIGHT=WEIGHT,EPSILON=EPSILON,SIGMA=SIGMA,ACCEPTANCE=ACCEPTANCE,LOGPRIOR=LOGPRIOR,LOGPROPOSAL=LOGPROPOSAL)
+    return A 
 end

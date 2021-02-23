@@ -1,261 +1,168 @@
-using Distributions, Plots, StatsPlots, Random, Optim
+using Distributions, Random
 using Flux: gradient
 using ForwardDiff: derivative
 using ProgressMeter
 using LinearAlgebra
+using JLD2
+
+# Load the data
+@load "G-and-K/data.jld2" y0; ystar = y0;
+
+# Transformation function
+f(z;θ) =  θ[1] + θ[2]*(1+0.8*(1-exp(-θ[3]*z))/(1+exp(-θ[3]*z)))*(1+z^2)^θ[4]*z;
+
+
+#--------------------------------- Randwom-Walk SMC-ABC ------------------------------------#
+RW_logPrior(ξ) = sum(logpdf.(Uniform(0,10),ξ[1:4])) + sum(logpdf.(Normal(0,1),ξ[5:end]));
+RW_Dist(ξ) = norm(sort(f.(ξ[5:end],θ=ξ[1:4])) .- sort(ystar));
+
+
+function RW_SMC_ABC_LocalMH(ξ0,ϵ;Σ,σ,K)
+    #=
+    ξ0: starting point of the local Metropolis-Hastings exploration, this will be the particle from 
+        previous iteration
+    ϵ:  the epsilon values for the current iteration, i.e. the target will be p(ξ|y) = p(ξ)l(x|ξ)I(d(y,x)<ϵ)
+    Σ:  Covariance Matrix used to propose new values
+    σ:  scale factors of the proposals
+    K:  Number of MH steps for the local exploration
+    =#
+    accepted = 0
+    C = size(Σ)[1]
+    for i = 1:K
+        xi_proposal = ξ0 .+  σ*rand(MultivariateNormal(zeros(C),Σ))
+        u = log(rand(Uniform(0,1)))
+        if u < (RW_logPrior(xi_proposal)-RW_logPrior(ξ0)) # An early rejection algorithm is employed here
+            if RW_Dist(xi_proposal) < ϵ
+                ξ0 = xi_proposal
+                accepted += 1
+            end
+        end
+    end
+    return (ξ0,accepted)
+end
+
+function RW_SMC_ABC(N,T,NoData;Threshold,σ,λ,K)
+    XI       = zeros(4+NoData,N,T+1);
+    EPSILON  = zeros(T+1);
+    DISTANCE = zeros(N,T+1);
+    WEIGHT   = zeros(N,T+1);
+    ANCESTOR = zeros(Int,N,T);
+    for i = 1:N
+        XI[:,i,1] = [rand(Uniform(0,10),4);rand(Normal(0,1),NoData)]
+        DISTANCE[i,1] = RW_Dist(XI[:,i,1])
+    end
+    SIGMA    = zeros(T+1)
+    SIGMA[1] = σ
+    ACCEPTANCE = zeros(T)
+    WEIGHT[:,1] .= 1/N;
+    NewValues = zeros(T)
+    EPSILON[1]  = findmax(DISTANCE[:,1])[1]
+    accepted = zeros(N)
+    @showprogress 1 "Computing.." for t = 1:T
+        ANCESTOR[:,t] = vcat(fill.(1:N,rand(Multinomial(N,WEIGHT[:,t])))...);
+        #=
+        if length(unique(DISTANCE[:,t]))<Int(Threshold*N)
+            EPSILON[t+1] = EPSILON[t]
+        else
+            EPSILON[t+1] = sort(unique(DISTANCE[:,t]))[Int(Threshold*N)]
+        end
+        =#
+        EPSILON[t+1] = quantile(DISTANCE[ANCESTOR[:,t],t],Threshold)
+        WEIGHT[:,t+1] = (DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1])/sum(DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1])
+        Σ = cov(XI[:,findall(WEIGHT[:,t].>0),t],dims=2) + 1e-8*I
+        Threads.@threads for i = 1:N
+            XI[:,i,t+1],accepted[i] = RW_SMC_ABC_LocalMH(XI[:,ANCESTOR[i,t],t],EPSILON[t+1],Σ=Σ,σ=SIGMA[t],K=K)
+            DISTANCE[i,t+1] = RW_Dist(XI[:,i,t+1])
+        end
+        SIGMA[t+1] = exp(log(SIGMA[t]) + λ*(sum(accepted)/(K*N)-0.234))
+        ACCEPTANCE[t] = sum(accepted)/(K*N)
+        NewValues[t] = count(accepted .> 0)
+    end
+    return (XI=XI,DISTANCE=DISTANCE,WEIGHT=WEIGHT,EPSILON=EPSILON,SIGMA=SIGMA,ACCEPTANCE=ACCEPTANCE,NewValues=NewValues,ANCESTOR=ANCESTOR)
+end
+
+#=
+function RW_SMC_ABC(N,T,NoData;Threshold=[0.3,0.5],CoolingSchedule=0.5,σ,λ,K)
+    XI       = zeros(4+NoData,N,T+1);
+    EPSILON  = zeros(T+1);
+    DISTANCE = zeros(N,T+1);
+    WEIGHT   = zeros(N,T+1);
+    ANCESTOR = zeros(Int,N,T);
+    for i = 1:N
+        XI[:,i,1] = [rand(Uniform(0,10),4);rand(Normal(0,1),NoData)]
+        DISTANCE[i,1] = RW_Dist(XI[:,i,1])
+    end
+    error_deduction = zeros(T+1)
+    SIGMA    = zeros(T+1)
+    SIGMA[1] = σ
+    ACCEPTANCE = zeros(T)
+    WEIGHT[:,1] .= 1/N;
+    EPSILON[1]  = findmax(DISTANCE[:,1])[1]
+    error_deduction[1] = EPSILON[1]
+    @showprogress 1 "Computing..." for t = 1:T
+        error_deduction[t+1] = min(error_deduction[t],CoolingSchedule*EPSILON[t])
+        EPSILON[t+1] = EPSILON[t] - error_deduction[t+1]
+        ANCESTOR[:,t] = collect(1:N)
+        for i = 1:N
+            WEIGHT[i,t+1] = WEIGHT[i,t] * (RW_Dist(XI[:,ANCESTOR[i,t],t])<EPSILON[t+1])
+        end
+        while length(findall(WEIGHT[:,t+1].>0))<Int(Threshold[1]*N)
+            error_deduction[t+1] = CoolingSchedule*error_deduction[t+1]
+            EPSILON[t+1] = EPSILON[t] - error_deduction[t+1]
+            for i = 1:N
+                WEIGHT[i,t+1] = WEIGHT[i,t] * (RW_Dist(XI[:,ANCESTOR[i,t],t])<EPSILON[t+1])
+            end
+        end
+        WEIGHT[:,t+1] = WEIGHT[:,t+1]/sum(WEIGHT[:,t+1])
+        if length(findall(WEIGHT[:,t+1].>0))<Int(Threshold[2]*N)
+            ANCESTOR[:,t] = vcat(fill.(1:N,rand(Multinomial(N,WEIGHT[:,t])))...);
+            WEIGHT[:,t+1] .= 1/N
+        end
+        Σ = cov(XI[:,findall(WEIGHT[:,t].>0),t],dims=2)
+        accepted = zeros(N)
+        proposed = zeros(N)
+        Threads.@threads for i = 1:N
+            XI[:,i,t+1],acc = RW_SMC_ABC_LocalMH(XI[:,ANCESTOR[i,t],t],EPSILON[t+1],Σ=Σ,σ=SIGMA[t],K=K)
+            accepted[i] = acc
+            proposed[i] = K
+            DISTANCE[i,t+1] = RW_Dist(XI[:,i,t+1])
+        end
+        acceptance = sum(accepted)/sum(proposed)
+        SIGMA[t+1] = exp(log(SIGMA[t]) + λ*(acceptance-0.234))
+        #SIGMA[t+1] = SIGMA[t]
+        ACCEPTANCE[t] = acceptance
+    end
+    (XI=XI,DISTANCE=DISTANCE,WEIGHT=WEIGHT,EPSILON=EPSILON,SIGMA=SIGMA,ACCEPTANCE=ACCEPTANCE,ANCESTOR=ANCESTOR)
+end
+=#
+R = RW_SMC_ABC(10000,2000,20,Threshold=0.99,σ=0.3,λ=1.0,K=1)
+
+using Plots, StatsPlots
 theme(:mute)
-function f(z;θ)
-    return θ[1] + θ[2]*(1+0.8*((1-exp(-θ[3]*z))/(1+exp(-θ[3]*z))))*(1+z^2)^θ[4]*z
+
+plot(log.(R.EPSILON))
+t = 1500
+density(R.XI[3,findall(R.WEIGHT[:,t].>0),t])
+
+
+
+proposal_unique = zeros(2000)
+ancestor_unique = zeros(2000)
+current_unique  = zeros(2000)
+
+for i = 1:2000
+    proposal_unique[i] = length(unique(R.DISTANCE[R.ANCESTOR[:,i],i]))
+    ancestor_unique[i] = length(unique(R.ANCESTOR[:,i]))
+    current_unique[i]  = length(unique(R.DISTANCE[:,i+1]))
 end
-function φ(ξ)
-    θ = ξ[1:4]
-    z = ξ[5:end]
-    return f.(z,θ=θ)
-end
-logPrior(ξ) = sum(logpdf.(Uniform(0,10),ξ[1:4]))+sum(logpdf.(Normal(0,1),ξ[5:end]))
+plot(proposal_unique); plot!(ancestor_unique)
 
-function ESJD_Langevin(sigma;P0,U,Σ,epsilon,GradP,grad,dist)
-    #=
-    sigma     : vector of the scale factors, for Langevin-style update, this is [σ1,σ2]
-    P0        : the matrix of particles from previous iteration
-    U         : the random seeds (i.e. random Normals) used to make proposals in the current iteration
-    Σ         : the variance-covariance matrix used to generate the random matrix U 
-    epsilon   : the threshold distance used in the current iteration
-    GradP     : the gradient matrix of the log-distance function at each particle value ξ_{n-1}^i for i = 1,2,...,N
-    grad      : the function need to calculate the gradients at the proposals
-    dist      : distance metric used in the calcualtion
-    =#
+plot(proposal_unique);plot!(current_unique)
 
-    #=
-    The function returns the empirical Expected-Squared-Jump-Distance (ESJD) corresponding to the scale
-    factors sigma = [σ1,σ2]
-    =#
-    
-    # Find the dimensions of P0, N: no. rows; C: number of columns
-    C,N = size(P0)
+plot(proposal_unique ./ ancestor_unique)
 
-    # Proposal the new particles by the Langevin dynamics ξ' = ξ_{n-1} - sigma[1]*∇d(ξ_{n-1}) + sigma[2]*u
-    # NewP: the matrix of proposals, the i-th row of NewP corresponds to the proposal based on ξ_{n-1}^i
-    NewP = P0 .- sigma^2/2*Σ*GradP .+ sigma*U
-    
-    Acceptance_Prob_Vec = zeros(N)
-    Jump_Distance_Vec   = (mapslices(norm,P0 .- NewP,dims=1)[1,:]).^2
-    
-    # Calcualte the gradients at the proposals for calculating the backward proposal density q(ξ_{n-1}|ξ')
-    Proposal_Grad = mapslices(grad,NewP,dims=1)
+plot(R.ACCEPTANCE,ylim=(0,1))
 
-    for i = 1:N
-        forward_proposal_density = MultivariateNormal(P0[:,i] .- sigma^2/2*Σ*GradP[:,i],sigma^2*Σ)
-        backward_proposal_density= MultivariateNormal(NewP[:,i] .- sigma^2/2*Σ*Proposal_Grad[:,i],sigma^2*Σ)
-        old_particle_logprior    = logPrior(P0[:,i])
-        new_particle_logprior    = logPrior(NewP[:,i])
-        log_forwardQ             = logpdf(forward_proposal_density,NewP[:,i])
-        log_backwardQ            = logpdf(backward_proposal_density,P0[:,i])
-        Acceptance_Prob_Vec[i]   = exp(min(0,new_particle_logprior-old_particle_logprior+log_backwardQ-log_forwardQ+log(dist(NewP[:,i])<epsilon)))
-    end
-    return mean(Jump_Distance_Vec.*Acceptance_Prob_Vec)
-end
-function MHUpdate_Langevin(sigma;P0,U,Σ,epsilon,GradP,grad,dist)
-    #=
-    This function takes the same inputs as the function ESJD_Langevin. The differences is that the output of this function will be the results of Langevin-style update based on each particle in P0, using the optimal choice of sigma (i.e., sigma value that maximise ESJD)
-    =#
-    
-    # Find the dimensions of P0, N: no. rows; C: number of columns
-    C,N = size(P0)
+plot(R.SIGMA)
 
-    # Proposal the new particles by the Langevin dynamics ξ' = ξ_{n-1} - sigma[1]*∇d(ξ_{n-1}) + sigma[2]*u
-    # NewP: the matrix of proposals, the i-th row of NewP corresponds to the proposal based on ξ_{n-1}^i
-    NewP = P0 .- sigma^2/2*Σ*GradP .+ sigma*U
-    
-    Acceptance_Prob_Vec = zeros(N)
-    
-    Acceptance_Ind_Vec = ones(Int64,N)
-    # Calcualte the gradients at the proposals for calculating the backward proposal density q(ξ_{n-1}|ξ')
-    Proposal_Grad = mapslices(grad,NewP,dims=1)
-
-    for i = 1:N
-        # obtain the forward proposal and backward proposal
-        forward_proposal_density = MultivariateNormal(P0[:,i] .- sigma^2/2*Σ*GradP[:,i],sigma^2*Σ)
-        backward_proposal_density= MultivariateNormal(NewP[:,i] .- sigma^2/2*Σ*Proposal_Grad[:,i],sigma^2*Σ)
-        # calculate the priors
-        old_particle_logprior    = logPrior(P0[:,i])
-        new_particle_logprior    = logPrior(NewP[:,i])
-        # calculate the proposal densities
-        log_forwardQ             = logpdf(forward_proposal_density,NewP[:,i])
-        log_backwardQ            = logpdf(backward_proposal_density,P0[:,i])
-        # calculate the acceptance probabilities for the proposal
-        Acceptance_Prob_Vec[i]   = exp(min(0,new_particle_logprior-old_particle_logprior+log_backwardQ-log_forwardQ+log(dist(NewP[:,i])<epsilon)))
-
-        u = rand(Uniform(0,1))
-
-        if u >= Acceptance_Prob_Vec[i]
-            # Upon rejection, set NewP[i,:] = P0[i,:]
-            NewP[:,i] = P0[:,i]
-            Acceptance_Ind_Vec[i] = 0
-        end
-    end
-    return (NewParticles=NewP,Average_Accept_Rate = mean(Acceptance_Prob_Vec),Decision = Acceptance_Ind_Vec)
-end
-function LocalMH_Langevin(P0,epsilon,rang;Σ,GradP,grad,dist)
-    #=
-    LocalMH_Langevin performs the local Metropolis-Hastings exploration. It uses particles from the previous SMC step as starting point and explore the space once using Langevin-style proposals. 
-    The function will return the updated particles 
-    =#
-    C,N = size(P0)
-    U = rand(MultivariateNormal(zeros(C),Σ),N)
-    object(x) = -ESJD_Langevin(x,P0=P0,U=U,Σ=Σ,epsilon=epsilon,GradP=GradP,grad=grad,dist=dist)
-    
-    Opt = optimize(object,rang[1],rang[2])
-
-
-    opt_simga = Opt.minimizer
-    NewP,AcceptRate,Decision=MHUpdate_Langevin(opt_simga,P0=P0,U=U,Σ=Σ,epsilon=epsilon,GradP=GradP,grad=grad,dist=dist)
-    return (Opt_Sigma=opt_simga,NewP=NewP,AcceptRate=AcceptRate,Decision=Decision)
-end
-function SMC_Langevin(N,T,y;Threshold,rang)
-    C       = length(y)
-    P       = zeros(C+4,N,T+1);
-    GradP   = zeros(C+4,N,T);
-    W       = zeros(N,T+1);
-    A       = zeros(Int64,N,T);
-
-
-    D       = zeros(N,T+1);
-    JumpD   = zeros(N,T);
-
-    ϵ       = zeros(T+1);
-    α       = zeros(T);
-    SMat    = zeros(T);
-    #SMat[1,:] = s0;
-
-
-
-    d(ξ)    = norm(φ(ξ) .- y);
-    guide(ξ) = -logPrior(ξ)+d(ξ)
-    grad(ξ) = normalize(gradient(guide,ξ)[1])
-    
-    # The particles at the 0-th step of the SMC are sampled from 
-    # the prior
-    for i = 1:N
-        P[:,i,1] = [rand(Uniform(0,10),4);rand(Normal(0,1),C)]
-        D[i,1]   = d(P[:,i,1])
-    end
-
-    ϵ[1] = findmax(D[:,1])[1]
-    W[:,1] .= 1/N;
-
-    @showprogress 1 "Computing..." for t = 1:T
-        # Sample the ancestor for each particle
-        A[:,t] = vcat(fill.(1:N,rand(Multinomial(N,W[:,t])))...);
-
-        # Search for the next ϵ value
-        #ϵ[t+1] = quantile(D[:,t],Threshold);
-        if length(unique(D[:,t]))<Int(Threshold*N)
-            ϵ[t+1] = ϵ[t]
-        else
-            ϵ[t+1] = sort(unique(D[:,t]))[Int(Threshold*N)]
-        end
-        W[:,t+1] = (D[A[:,t],t] .< ϵ[t+1])/sum(D[A[:,t],t] .< ϵ[t+1])
-        
-        Σ = cov(P[:,A[:,t],t],dims=2);
-        #Σ = I;
-        GradP[:,:,t] = mapslices(grad,P[:,:,t],dims=1)
-
-        opt_s,newp,acc,_ = LocalMH_Langevin(P[:,A[:,t],t],ϵ[t+1],rang,Σ=Σ,GradP = GradP[:,A[:,t],t],grad=grad,dist=d)
-
-        SMat[t] = opt_s;
-        P[:,:,t+1]  = newp;
-        α[t]        = acc;
-        D[:,t+1]    = mapslices(d,newp,dims=1)[1,:];
-        JumpD[:,t]  = mapslices(norm, P[:,A[:,t],t] .- newp, dims=1)[1,:]
-    end
-
-    return (Particles = P, Ancestors = A, Weights = W, Epsilon = ϵ, JumpDistance = JumpD, Distance = D, AcceptancePortion = α, OptimalScale=SMat)
-end
-function ESJD_RW(sigma;P0,U,Σ,epsilon,dist)
-    N,C = size(P0)
-    NewP = P0 .+ sigma*U
-    Acceptance_Prob_Vec = zeros(N)
-    Jump_Distance_Vec = (mapslices(norm,P0 .- NewP,dims=2)[:,1]).^2
-
-    for i = 1:N
-        old_particle_logprior    = logPrior(P0[i,:])
-        new_particle_logprior    = logPrior(NewP[i,:])
-        Acceptance_Prob_Vec[i]   = exp(min(0,new_particle_logprior-old_particle_logprior+log(dist(NewP[i,:])<epsilon)))
-    end
-    return mean(Jump_Distance_Vec.*Acceptance_Prob_Vec)
-end
-function MHUpdate_RW(sigma;P0,U,Σ,epsilon,dist)
-    N,C = size(P0)
-    NewP = P0 .+ sigma * U
-    Acceptance_Prob_Vec = zeros(N)
-    Acceptance_Ind_Vec  = ones(Int64,N)
-    for i = 1:N
-        old_particle_logprior    = logPrior(P0[i,:])
-        new_particle_logprior    = logPrior(NewP[i,:])
-        Acceptance_Prob_Vec[i]   = exp(min(0,new_particle_logprior-old_particle_logprior+log(dist(NewP[i,:])<epsilon)))
-        u = rand(Uniform(0,1))
-
-        if u >= Acceptance_Prob_Vec[i]
-            NewP[i,:] = P0[i,:]
-            Acceptance_Ind_Vec[i] = 0
-        end
-    end
-    return (NewParticles=NewP,Average_Accept_Rate = mean(Acceptance_Prob_Vec),Decision = Acceptance_Ind_Vec)
-end
-function LocalMH_RW(P0,epsilon,rang;Σ,dist)
-    N,C = size(P0)
-    U = zeros(N,C)
-    for i = 1:N
-        U[i,:] = rand(MultivariateNormal(zeros(C),Σ))
-    end
-    object(x) = -ESJD_RW(x,P0=P0,U=U,Σ=Σ,epsilon=epsilon,dist=dist)
-    Opt = optimize(object,rang[1],rang[2])
-    opt_sigma = Opt.minimizer
-    NewP, AcceptRate, Decision = MHUpdate_RW(opt_sigma,P0=P0,U=U,Σ=Σ,epsilon=epsilon,dist=dist)
-    return (Opt_Sigma=opt_sigma,NewP=NewP,AcceptRate=AcceptRate,Decision=Decision)
-end
-function SMC_RW(N,T,y;Threshold,rang)
-    C       = length(y)
-    P       = zeros(N,C+4,T+1);
-    W       = zeros(N,T+1);
-    A       = zeros(Int64,N,T);
-
-
-    D       = zeros(N,T+1);
-    JumpD   = zeros(N,T);
-    ϵ       = zeros(T+1);
-    α       = zeros(T);
-    SVec    = zeros(T);
-    d(ξ)    = norm(sort(φ(ξ)) .- sort(y));
-
-    for i = 1:N
-        P[i,:,1] = [rand(Uniform(0,10),4);rand(Normal(0,1),C)]
-        D[i,1]   = d(P[i,:,1])
-    end
-
-    ϵ[1] = findmax(D[:,1])[1]
-    W[:,1] .= 1/N;
-
-    @showprogress 1 "Computing..." for t = 1:T
-        A[:,t] = vcat(fill.(1:N,rand(Multinomial(N,W[:,t])))...);
-        if length(unique(D[:,t]))<Int(Threshold*N)
-            ϵ[t+1] = ϵ[t]
-        else
-            ϵ[t+1] = sort(unique(D[:,t]))[Int(Threshold*N)]
-        end
-        W[:,t+1] = (D[A[:,t],t] .< ϵ[t+1])/sum(D[A[:,t],t] .< ϵ[t+1])
-        Σ = cov(P[A[:,t],:,t]) + 1e-8*I;
-        #Σ = I;
-        opt_s,newp,acc,_ = LocalMH_RW(P[A[:,t],:,t],ϵ[t+1],rang,Σ=Σ,dist=d)
-        SVec[t] = opt_s
-        P[:,:,t+1] = newp
-        α[t] = acc;
-        D[:,t+1] = mapslices(d,newp,dims=2);
-        JumpD[:,t]  = mapslices(norm, P[A[:,t],:,t] .- newp, dims=2)
-    end
-    return (Particles = P, Ancestors = A, Weights = W, Epsilon = ϵ, JumpDistance = JumpD, Distance = D, AcceptancePortion = α, OptimalScale=SVec)
-end
-
-
-
+quantile(unique(R.DISTANCE[R.ANCESTOR[:,1],1]),0.95)
