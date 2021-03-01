@@ -142,7 +142,7 @@ theme(:mute)
 
 plot(log.(R.EPSILON))
 t = 1500
-density(R.XI[3,findall(R.WEIGHT[:,t].>0),t])
+density(R.XI[4,findall(R.WEIGHT[:,t].>0),t])
 
 
 
