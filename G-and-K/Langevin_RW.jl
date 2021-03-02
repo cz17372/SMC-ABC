@@ -19,8 +19,7 @@ RW_Dist(ξ) = norm(sort(f.(ξ[5:end],θ=ξ[1:4])) .- sort(ystar));
 
 function RW_SMC_ABC_LocalMH(ξ0,ϵ;Σ,σ,K)
     #=
-    ξ0: starting point of the local Metropolis-Hastings exploration, this will be the particle from 
-        previous iteration
+    ξ0: starting point of the local Metropolis-Hastings exploration, this will be the particle from previous iteration
     ϵ:  the epsilon values for the current iteration, i.e. the target will be p(ξ|y) = p(ξ)l(x|ξ)I(d(y,x)<ϵ)
     Σ:  Covariance Matrix used to propose new values
     σ:  scale factors of the proposals
@@ -135,14 +134,14 @@ function RW_SMC_ABC(N,T,NoData;Threshold=[0.3,0.5],CoolingSchedule=0.5,σ,λ,K)
     (XI=XI,DISTANCE=DISTANCE,WEIGHT=WEIGHT,EPSILON=EPSILON,SIGMA=SIGMA,ACCEPTANCE=ACCEPTANCE,ANCESTOR=ANCESTOR)
 end
 =#
-R = RW_SMC_ABC(10000,2000,20,Threshold=0.99,σ=0.3,λ=1.0,K=1)
+R2 = RW_SMC_ABC(10000,1500,20,Threshold=0.99,σ=0.3,λ=1.0,K=1)
 
 using Plots, StatsPlots
 theme(:mute)
 
 plot(log.(R.EPSILON))
-t = 1500
-density(R.XI[4,findall(R.WEIGHT[:,t].>0),t])
+t = 1000
+density(R.XI[4,findall(R.WEIGHT[:,t].> 0),t])
 
 
 
