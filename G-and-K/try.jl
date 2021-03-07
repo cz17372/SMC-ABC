@@ -54,8 +54,8 @@ UniqueNaive2 = get_unique_initials(R_Naive2,100)
 plot(UniqueNaive2);plot!(UniqueRW2);plot!(UniqueL)
 plot(R_Langevin2.SIGMA)
 
-n = 1; t = 50
-density(R_RWM.Sample[20001:end,n],label="RW-MH")
+n = 4; t = 100
+density(R_RWM.Sample[20001:end,n],label="RW-MH",dpi=500)
 density!(R_RW2.XI[n,:,t],label="RW-SMC-ABC")
 density!(R_Langevin2.XI[n,:,t],label="L-SMC-ABC")
 density!(R_Naive2.THETA[n,:,t],label="Naive-SMC-ABC")
