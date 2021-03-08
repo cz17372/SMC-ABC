@@ -1,8 +1,25 @@
 
-include("G-and-K/MCMC.jl")
-@load "G-and-K/RWM_COV.jld2" 
-R_RWM = RWM(100000,RWM_Σ,0.2)
+using Random, LinearAlgebra
 using Plots, StatsPlots
+using JLD2
+theme(:mute)
+include("G-and-K/MCMC.jl")
+include("G-and-K/SMC-ABC.jl")
+Random.seed!(17372)
+zstar = rand(Normal(0,1),250)
+θstar = [3.0,1.0,2.0,0.5]
+ystar = f.(zstar,θ=θstar)
+
+@load "G-and-K/data.jld2"; ystar = y0;
+@load "G-and-K/RWM_COV.jld2"
+
+R_RWM,acc = RWM(100000,RWM_Σ,0.2)
+
+
+plot(R_RWM[1][:,4])
+density(R_RWM[1][50001:end,4])
+sigma = cov(R_RWM[1][20001:end,:])
+
 
 R_Langevin = LSMCABC(10000,300,20,Threshold=0.95,σ=0.3,λ=1.0) # time taken = 31mins
 R_Naive    = NaiveSMCABC(10000,300,20,Threshold=0.95,σ=0.3,λ=1.0) # time taken = 18 seconds
@@ -30,8 +47,8 @@ plot(UniqueNaive,label="Naive-SMC-ABC",xlabel="Iteration",ylabel="No. Unique Ini
 plot!(UniqueRW,label="RW-SMC-ABC")
 plot!(UniqueL,label="L-SMC-ABC")
 
-n = 4; t = 300
-density(R_RWM.Sample[20001:end,n],label="RW-MH")
+n = 1; t = 200
+density(R_RWM[20001:end,n],label="RW-MH")
 density!(R_RW.XI[n,:,t],label="RW-SMC-ABC")
 density!(R_Langevin.XI[n,:,t],label="L-SMC-ABC")
 density!(R_Naive.THETA[n,:,t])
@@ -54,11 +71,14 @@ UniqueNaive2 = get_unique_initials(R_Naive2,100)
 plot(UniqueNaive2);plot!(UniqueRW2);plot!(UniqueL)
 plot(R_Langevin2.SIGMA)
 
-n = 4; t = 100
-density(R_RWM.Sample[20001:end,n],label="RW-MH",dpi=500)
+n = 1; t = 100
+density(R_RWM[20001:end,n],label="RW-MH",dpi=500)
 density!(R_RW2.XI[n,:,t],label="RW-SMC-ABC")
 density!(R_Langevin2.XI[n,:,t],label="L-SMC-ABC")
 density!(R_Naive2.THETA[n,:,t],label="Naive-SMC-ABC")
 
-histogram(R_RW2.XI[4,:,250],bins=200,color=:grey,normalize=true)
-density!(R_RWM.Sample[20001:end,4],label="RW-MH")
+n = 4; t = 50
+boxplot(R_RWM[20001:end,n],label="RW-MH",dpi=500)
+boxplot!(R_RW2.XI[n,:,t],label="RW-SMC-ABC",color=:grey)
+boxplot!(R_Langevin2.XI[n,:,t],label="L-SMC-ABC",color=:grey)
+boxplot!(R_Naive2.THETA[n,:,t],label="Naive-S",color=:grey)

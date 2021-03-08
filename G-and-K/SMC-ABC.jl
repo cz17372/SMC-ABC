@@ -178,14 +178,25 @@ end
 
 LlogPrior(ξ) = sum(logpdf.(Uniform(0,10),ξ[1:4])) + sum(logpdf.(Normal(0,1),ξ[5:end]))
 LDist(ξ) = norm(sort(f.(ξ[5:end],θ=ξ[1:4])) .- sort(ystar))
-gradDist(ξ) = norm(f.(ξ[5:end],θ=ξ[1:4]) .- ystar)
-grad(ξ)   = normalize(gradient(gradDist,ξ)[1])
+gradDist(ξ) = norm(f.(ξ[5:end],θ=ξ[1:4]) .- ystar)^2
+#=
+function grad(ξ)
+    gd = gradient(gradDist,ξ)[1]
+    if norm(gd) > 5
+        return normalize(gd)
+    else
+        return gd
+    end
+end
+=#
+
+grad(ξ)   = normalize(gradient(LDist,ξ)[1])
 
 function LSMCABC_LocalMH(ξ0,ϵ;Σ,σ)
-    μ = ξ0 .- σ^2/2 * grad(ξ0) 
+    μ = ξ0 .- σ^2/2 * Σ * grad(ξ0) 
     newξ = rand(MultivariateNormal(μ,σ^2*Σ))
 
-    reverseμ = newξ .- σ^2/2 * grad(newξ)
+    reverseμ = newξ .- σ^2/2 * Σ * grad(newξ)
     
     forward_proposal_density = logpdf(MultivariateNormal(ξ0,σ^2*Σ),newξ)
     backward_proposal_density = logpdf(MultivariateNormal(reverseμ,σ^2*Σ),ξ0)
