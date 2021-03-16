@@ -55,30 +55,44 @@ density!(R_Naive.THETA[n,:,t])
 
 # ------------------------------------
 
-R_RW2       = RWSMCABC(10000,100,20,Threshold=0.9,σ=0.3,λ=1.0,Method="Unique")
-R_Naive2    = NaiveSMCABC(10000,100,20,Threshold=0.9,σ=0.3,λ=1.0,Method="Unique")
-R_Langevin2 = LSMCABC(10000,100,20,Threshold=0.9,σ=0.3,λ=1.0,Method="Unique")
+R_RW2       = RWSMCABC(10000,300,20,Threshold=0.9,σ=0.3,λ=1.0,Method="Unique")
+R_Naive2    = NaiveSMCABC(10000,300,20,Threshold=0.9,σ=0.3,λ=1.0,Method="Unique")
+R_Langevin2 = LSMCABC(10000,300,20,Threshold=0.9,σ=0.3,λ=1.0,Method="Unique")
 
 
 plot(log.(R_Naive2.EPSILON),label="Naive-SMC-ABC",xlabel="Iteration",ylabel="epsilon")
 plot!(log.(R_RW2.EPSILON),label="RW-SMC-ABC")
 plot!(log.(R_Langevin2.EPSILON),label="L-SMC-ABC")
+savefig("epsilon.pdf")
 
-UniqueL = get_unique_initials(R_Langevin2,100)
-UniqueRW2 = get_unique_initials(R_RW2,100)
-UniqueNaive2 = get_unique_initials(R_Naive2,100)
+UniqueL = get_unique_initials(R_Langevin2,300)
+UniqueRW2 = get_unique_initials(R_RW2,300)
+UniqueNaive2 = get_unique_initials(R_Naive2,300)
 
-plot(UniqueNaive2);plot!(UniqueRW2);plot!(UniqueL)
-plot(R_Langevin2.SIGMA)
+plot(UniqueNaive2,xlabel="Iteration",label="Naive-SMC-ABC")
+plot!(UniqueRW2,label="RW-SMC-ABC")
+plot!(UniqueL,label="L-SMC-ABC")
+savefig("uniqueparticles.pdf")
 
-n = 1; t = 100
-density(R_RWM[20001:end,n],label="RW-MH",dpi=500)
+n = 1; t = 300
+p1=density(R_RWM[20001:end,n],label="RW-MH",xlabel="a",ylabel="Posterior")
 density!(R_RW2.XI[n,:,t],label="RW-SMC-ABC")
 density!(R_Langevin2.XI[n,:,t],label="L-SMC-ABC")
 density!(R_Naive2.THETA[n,:,t],label="Naive-SMC-ABC")
-
-n = 4; t = 50
-boxplot(R_RWM[20001:end,n],label="RW-MH",dpi=500)
-boxplot!(R_RW2.XI[n,:,t],label="RW-SMC-ABC",color=:grey)
-boxplot!(R_Langevin2.XI[n,:,t],label="L-SMC-ABC",color=:grey)
-boxplot!(R_Naive2.THETA[n,:,t],label="Naive-S",color=:grey)
+n=2
+p2=density(R_RWM[20001:end,n],label="RW-MH",xlabel="b",ylabel="Posterior")
+density!(R_RW2.XI[n,:,t],label="RW-SMC-ABC")
+density!(R_Langevin2.XI[n,:,t],label="L-SMC-ABC")
+density!(R_Naive2.THETA[n,:,t],label="Naive-SMC-ABC")
+n=3
+p3=density(R_RWM[20001:end,n],label="RW-MH",xlabel="g",ylabel="Posterior")
+density!(R_RW2.XI[n,:,t],label="RW-SMC-ABC")
+density!(R_Langevin2.XI[n,:,t],label="L-SMC-ABC")
+density!(R_Naive2.THETA[n,:,t],label="Naive-SMC-ABC")
+n=4
+p4=density(R_RWM[20001:end,n],label="RW-MH",xlabel="K",ylabel="Posterior")
+density!(R_RW2.XI[n,:,t],label="RW-SMC-ABC")
+density!(R_Langevin2.XI[n,:,t],label="L-SMC-ABC")
+density!(R_Naive2.THETA[n,:,t],label="Naive-SMC-ABC")
+plot(p1,p2,p3,p4,layout=(2,2),size=(1000,800))
+savefig("density.pdf")
