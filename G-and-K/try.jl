@@ -6,7 +6,7 @@ theme(:mute)
 include("G-and-K/MCMC.jl")
 include("G-and-K/SMC-ABC.jl")
 Random.seed!(17372)
-zstar = rand(Normal(0,1),250)
+zstar = rand(Normal(0,1),100)
 θstar = [3.0,1.0,2.0,0.5]
 ystar = f.(zstar,θ=θstar)
 
@@ -21,9 +21,9 @@ density(R_RWM[1][50001:end,4])
 sigma = cov(R_RWM[1][20001:end,:])
 
 
-R_Langevin = LSMCABC(10000,300,20,Threshold=0.95,σ=0.3,λ=1.0) # time taken = 31mins
-R_Naive    = NaiveSMCABC(10000,300,20,Threshold=0.95,σ=0.3,λ=1.0) # time taken = 18 seconds
-R_RW       = RWSMCABC(10000,300,20,Threshold=0.95,σ=0.3,λ=1.0) # 1min 18s
+R_Langevin = LSMCABC(10000,100,100,Threshold=0.95,σ=0.3,λ=1.0) # time taken = 31mins
+R_Naive    = NaiveSMCABC(10000,100,20,Threshold=0.95,σ=0.3,λ=1.0) # time taken = 18 seconds
+R_RW       = RWSMCABC(10000,100,20,Threshold=0.95,σ=0.3,λ=1.0) # 1min 18s
 
 
 plot(log.(R_Naive.EPSILON),label="Naive-SMC-ABC",xlabel="Iteration",ylabel="epsilon")
@@ -55,9 +55,9 @@ density!(R_Naive.THETA[n,:,t])
 
 # ------------------------------------
 
-R_RW2       = RWSMCABC(10000,300,20,Threshold=0.9,σ=0.3,λ=1.0,Method="Unique")
-R_Naive2    = NaiveSMCABC(10000,300,20,Threshold=0.9,σ=0.3,λ=1.0,Method="Unique")
-R_Langevin2 = LSMCABC(10000,300,20,Threshold=0.9,σ=0.3,λ=1.0,Method="Unique")
+R_RW2       = RWSMCABC(10000,100,100,Threshold=0.9,σ=0.3,λ=1.0,Method="Unique")
+R_Naive2    = NaiveSMCABC(10000,100,100,Threshold=0.9,σ=0.3,λ=1.0,Method="Unique")
+R_Langevin2 = LSMCABC(10000,100,100,Threshold=0.9,σ=0.3,λ=1.0,Method="Unique")
 
 
 plot(log.(R_Naive2.EPSILON),label="Naive-SMC-ABC",xlabel="Iteration",ylabel="epsilon")
@@ -65,9 +65,9 @@ plot!(log.(R_RW2.EPSILON),label="RW-SMC-ABC")
 plot!(log.(R_Langevin2.EPSILON),label="L-SMC-ABC")
 savefig("epsilon.pdf")
 
-UniqueL = get_unique_initials(R_Langevin2,300)
-UniqueRW2 = get_unique_initials(R_RW2,300)
-UniqueNaive2 = get_unique_initials(R_Naive2,300)
+UniqueL = get_unique_initials(R_Langevin2,100)
+UniqueRW2 = get_unique_initials(R_RW2,100)
+UniqueNaive2 = get_unique_initials(R_Naive2,100)
 
 plot(UniqueNaive2,xlabel="Iteration",label="Naive-SMC-ABC")
 plot!(UniqueRW2,label="RW-SMC-ABC")
@@ -96,3 +96,14 @@ density!(R_Langevin2.XI[n,:,t],label="L-SMC-ABC")
 density!(R_Naive2.THETA[n,:,t],label="Naive-SMC-ABC")
 plot(p1,p2,p3,p4,layout=(2,2),size=(1000,800))
 savefig("density.pdf")
+
+
+
+
+
+density(R_Naive2.THETA[4,:,100])
+density!(R_RW2.XI[4,:,end])
+density!(R_Langevin2.XI[4,:,end])
+plot(log.(R_Naive2.EPSILON))
+plot!(log.(R_RW2.EPSILON))
+plot!(log.(R_Langevin2.EPSILON))

@@ -4,12 +4,19 @@ using ForwardDiff: derivative
 
 # Define the g-and-k function that transform standard Normal RV into the g-and-k RVs
 f(z;θ) = θ[1] + θ[2]*(1+0.8*(1-exp(-θ[3]*z))/(1+exp(-θ[3]*z)))*(1+z^2)^θ[4]*z;
-
+function summary(y)
+    E = quantile(y,collect(1/8:1/8:1))
+    S = zeros(4)
+    S[1] = E[4]; S[2] = E[6]-E[2]; S[3] = (E[6]+E[2]-2*E[4])/S[2]
+    S[4] = (E[7]-E[5]+E[3]-E[1])/S[2]
+    return S
+end
 
 #                   Naive-SMC-ABC                                   #
 
 NaivelogPrior(θ) = sum(logpdf.(Uniform(0,10),θ))
-NaiveDist(x) = norm(sort(x) .- sort(ystar))
+NaiveDist(x) = norm(summary(x) .- summary(ystar))
+
 function NaiveSMCABC_LocalMH(θ0,x0,ϵ; Σ, σ)
     #=
     Parameters:
@@ -61,7 +68,8 @@ function NaiveSMCABC(N,T,NoData;Threshold,σ,λ,Method="ESS")
     WEIGHT[:,1] .= 1/N
 
     acc_vec = zeros(N)
-    @showprogress 1 "Computing..." for t = 1:T
+    for t = 1:T
+        print("Iteration ",t,"\n")
         # We first do the resampling and determine the next ϵ value based on the resampled particles
         ANCESTOR[:,t] = vcat(fill.(1:N,rand(Multinomial(N,WEIGHT[:,t])))...);
         # To have a ESS of at least Threshod*N we find the "Threshold" quantile of the distances
@@ -102,7 +110,7 @@ end
 #                   Random-Walk SMC-ABC (RW-SMC-ABC)                #
 
 RWlogPrior(ξ) = sum(logpdf.(Uniform(0,10),ξ[1:4])) + sum(logpdf.(Normal(0,1),ξ[5:end]))
-RWDist(ξ)     = norm(sort(f.(ξ[5:end],θ=ξ[1:4])) .- sort(ystar))
+RWDist(ξ)     = norm(summary(f.(ξ[5:end],θ=ξ[1:4])) .- summary(ystar))
 function RWSMCABC_LocalMH(ξ0,ϵ;Σ,σ)
     # Propose a new particle
     newξ = rand(MultivariateNormal(ξ0,σ^2*Σ))
@@ -138,7 +146,8 @@ function RWSMCABC(N,T,NoData;Threshold,σ,λ,Method="ESS")
 
     accepted = zeros(N)
 
-    @showprogress 1 "Computing..." for t = 1:T
+    for t = 1:T
+        print("Iteration ",t,"\n")
         ANCESTOR[:,t] = vcat(fill.(1:N,rand(Multinomial(N,WEIGHT[:,t])))...);
         #=
         if Method == "ESS"
@@ -177,7 +186,7 @@ end
 #                   Langevin SMC-ABC (L-SMC-ABC)                    #
 
 LlogPrior(ξ) = sum(logpdf.(Uniform(0,10),ξ[1:4])) + sum(logpdf.(Normal(0,1),ξ[5:end]))
-LDist(ξ) = norm(sort(f.(ξ[5:end],θ=ξ[1:4])) .- sort(ystar))
+LDist(ξ) = norm(summary(f.(ξ[5:end],θ=ξ[1:4])) .- summary(ystar))
 gradDist(ξ) = norm(f.(ξ[5:end],θ=ξ[1:4]) .- ystar)^2
 #=
 function grad(ξ)
@@ -190,7 +199,7 @@ function grad(ξ)
 end
 =#
 
-grad(ξ)   = normalize(gradient(LDist,ξ)[1])
+grad(ξ)   = normalize(gradient(gradDist,ξ)[1])
 
 function LSMCABC_LocalMH(ξ0,ϵ;Σ,σ)
     μ = ξ0 .- σ^2/2 * Σ * grad(ξ0) 
@@ -236,7 +245,8 @@ function LSMCABC(N,T,NoData;Threshold,σ,λ,Method="ESS")
     WEIGHT[:,1] .= 1/N
     EPSILON[1],_ = findmax(DISTANCE[:,1])
     accepted = zeros(N)
-    @showprogress 1 "Computing.." for t = 1:T
+    for t = 1:T
+        print("Iteration ",t,"\n")
         ANCESTOR[:,t] = vcat(fill.(1:N,rand(Multinomial(N,WEIGHT[:,t])))...)
         #=
         if Method == "ESS"
@@ -269,6 +279,5 @@ function LSMCABC(N,T,NoData;Threshold,σ,λ,Method="ESS")
     end
     return (XI=XI,DISTANCE=DISTANCE,EPSILON=EPSILON,WEIGHT=WEIGHT,SIGMA=SIGMA,ACCEPTANCE=ACCEPTANCE,ANCESTOR=ANCESTOR)
 end
-
 
 
