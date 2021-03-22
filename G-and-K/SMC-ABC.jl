@@ -146,8 +146,8 @@ function RWSMCABC(N,T,NoData;Threshold,σ,λ,Method="ESS")
 
     accepted = zeros(N)
 
-    for t = 1:T
-        print("Iteration ",t,"\n")
+    @showprogress 1 "Computing.." for t = 1:T
+        #print("Iteration ",t,"\n")
         ANCESTOR[:,t] = vcat(fill.(1:N,rand(Multinomial(N,WEIGHT[:,t])))...);
         #=
         if Method == "ESS"
