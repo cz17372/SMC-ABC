@@ -202,6 +202,7 @@ end
 grad(ξ)   = normalize(gradient(gradDist,ξ)[1])
 
 function LSMCABC_LocalMH(ξ0,ϵ;Σ,σ)
+    #μ = ξ0 .- σ^2/2 * Σ * grad(ξ0) 
     μ = ξ0 .- σ^2/2 * Σ * grad(ξ0) 
     newξ = rand(MultivariateNormal(μ,σ^2*Σ))
 
@@ -245,8 +246,8 @@ function LSMCABC(N,T,NoData;Threshold,σ,λ,Method="ESS")
     WEIGHT[:,1] .= 1/N
     EPSILON[1],_ = findmax(DISTANCE[:,1])
     accepted = zeros(N)
-    for t = 1:T
-        print("Iteration ",t,"\n")
+    @showprogress 1 "Computing..." for t = 1:T
+        # print("Iteration ",t,"\n")
         ANCESTOR[:,t] = vcat(fill.(1:N,rand(Multinomial(N,WEIGHT[:,t])))...)
         #=
         if Method == "ESS"
@@ -275,9 +276,7 @@ function LSMCABC(N,T,NoData;Threshold,σ,λ,Method="ESS")
             DISTANCE[i,t+1] = LDist(XI[:,i,t+1])
         end
         ACCEPTANCE[t] = mean(accepted)
-        SIGMA[t+1] = exp(log(SIGMA[t]) + λ*(ACCEPTANCE[t] - 0.45) )
+        SIGMA[t+1] = exp(log(SIGMA[t]) + λ*(ACCEPTANCE[t] - 0.456) )
     end
     return (XI=XI,DISTANCE=DISTANCE,EPSILON=EPSILON,WEIGHT=WEIGHT,SIGMA=SIGMA,ACCEPTANCE=ACCEPTANCE,ANCESTOR=ANCESTOR)
 end
-
-
