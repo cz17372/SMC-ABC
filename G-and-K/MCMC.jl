@@ -9,7 +9,7 @@ function inverse(x;θ)
     while (f(lower,θ=θ)-x)*(f(upper,θ=θ)-x) >=0
         lower -= 1.0; upper += 1.0
     end
-    return find_zero(z->f(z;θ=θ)-x,(lower,upper))
+    return find_zero(z->f(z,θ=θ)-x,(lower,upper))
 end
 function log_likelihood(x;θ)
     # Find the corresponding z of x
@@ -37,23 +37,4 @@ function RWM(N,Σ,σ;y=ystar,θ0=rand(Uniform(0,10),4))
         end
     end
     return (Sample=Output,AcceptanceProb=AcceptanceProb/(N-1))
-end
-function RWMPlot(Chain,Burnin,VarName,TrueVar)
-    p1 = plot(Chain[:,1],label="",linewidth=0.5,xlabel="Iteration",ylabel=VarName[1])
-    hline!([TrueVar[1]],label="")
-    p2 = density(Chain[Burnin:end,1],label="",xlabel=VarName[1],ylabel="Density")
-    vline!([TrueVar[1]],label="")
-    p3 = plot(Chain[:,2],label="",linewidth=0.5,xlabel="Iteration",ylabel=VarName[2])
-    hline!([TrueVar[2]],label="")
-    p4 = density(Chain[Burnin:end,2],label="",xlabel=VarName[2],ylabel="Density")
-    vline!([TrueVar[2]],label="")
-    p5 = plot(Chain[:,3],label="",linewidth=0.5,xlabel="Iteration",ylabel=VarName[3])
-    hline!([TrueVar[3]],label="")
-    p6 = density(Chain[Burnin:end,3],label="",xlabel=VarName[3],ylabel="Density")
-    vline!([TrueVar[3]],label="")
-    p7 = plot(Chain[:,4],label="",linewidth=0.5,xlabel="Iteration",ylabel=VarName[4])
-    hline!([TrueVar[4]],label="")
-    p8 = density(Chain[Burnin:end,4],label="",xlabel=VarName[4],ylabel="Density")
-    vline!([TrueVar[4]],label="")
-    plot(p1,p2,p3,p4,p5,p6,p7,p8,layout=(2,4),size=(800,400))
 end
