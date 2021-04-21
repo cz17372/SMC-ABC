@@ -144,7 +144,8 @@ function BPS_SMC_ABC(N,T,NoData;Threshold,δ,refresh_rate,K)
     end
     WEIGHT[:,1] .= 1/N
     EPSILON[1] = findmax(DISTANCE[:,1])[1]
-    @showprogress 1 "Computing.." for t = 1:T
+    for t = 1:T
+        println("Iteration ",t)
         ANCESTOR[:,t] = vcat(fill.(1:N,rand(Multinomial(N,WEIGHT[:,t])))...);
         if length(unique(DISTANCE[ANCESTOR[:,t],t])) > Int(floor(0.4*N))
             EPSILON[t+1] = quantile(unique(DISTANCE[ANCESTOR[:,t],t]),Threshold)
@@ -152,7 +153,7 @@ function BPS_SMC_ABC(N,T,NoData;Threshold,δ,refresh_rate,K)
             EPSILON[t+1],_ = findmax(unique(DISTANCE[ANCESTOR[:,t],t]))
         end
         WEIGHT[:,t+1] = (DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1])/sum(DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1])
-        Threads.@threads for i = 1:N
+        @time Threads.@threads for i = 1:N
             if dist(U[:,ANCESTOR[i,t],t]) < EPSILON[t+1]
                 U[:,i,t+1] = ABC_BPS_Update(K,U[:,ANCESTOR[i,t],t],normalize(rand(Normal(0,1),4+NoData)),δ,refresh_rate,ϵ=EPSILON[t+1],NoData=NoData)
                 DISTANCE[i,t+1] = dist(U[:,i,t+1])
@@ -189,7 +190,9 @@ function RW_SMC_ABC(N,T,NoData;Threshold,δ,K)
     end
     WEIGHT[:,1] .= 1/N
     EPSILON[1] = findmax(DISTANCE[:,1])[1]
-    @showprogress 1 "Computing.."  for t = 1:T
+    for t = 1:T
+    #@showprogress 1 "Computing.."  for t = 1:T
+        println("Iteration ",t)
         ANCESTOR[:,t] = vcat(fill.(1:N,rand(Multinomial(N,WEIGHT[:,t])))...);
         if length(unique(DISTANCE[ANCESTOR[:,t],t])) > Int(floor(0.4*N))
             EPSILON[t+1] = quantile(unique(DISTANCE[ANCESTOR[:,t],t]),Threshold)
@@ -199,34 +202,12 @@ function RW_SMC_ABC(N,T,NoData;Threshold,δ,K)
         WEIGHT[:,t+1] = (DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1])/sum(DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1])
         Σ = cov(U[:,findall(WEIGHT[:,t].>0),t],dims=2) + 1e-8*I
         index = findall(WEIGHT[:,t+1] .> 0.0)
-        Threads.@threads for i in index
-            U[:,i,t+1] = RWMH(K,U[:,ANCESTOR[i,t],t],EPSILON[t+1],Σ,δ)
-            DISTANCE[i,t+1] = dist(U[:,i,t+1])
+        println("Starting the parallel loop")
+        @time Threads.@threads for i = 1:length(index)
+            U[:,index[i],t+1] = RWMH(K,U[:,ANCESTOR[index[i],t],t],EPSILON[t+1],Σ,δ)
             GC.safepoint()
+            DISTANCE[index[i],t+1] = dist(U[:,index[i],t+1])
         end
     end
     return (U=U,DISTANCE=DISTANCE,WEIGHT=WEIGHT,EPSILON=EPSILON,ANCESTOR=ANCESTOR)
 end
-
-R_BPS = BPS_SMC_ABC(10000,200,20,Threshold=0.7,δ = 0.1,refresh_rate = 0.5,K=50)
-plot(log.(R_BPS.EPSILON))
-t = 200
-index = findall(R_BPS.DISTANCE[:,t].>0)
-unique(R_BPS.DISTANCE[:,t])
-density(R_BPS.U[3,index,t])
-
-
-R = RW_SMC_ABC(10000,200,20,Threshold=0.7,δ=0.1,K=50)
-plot(log.(R.EPSILON))
-t = 200
-index = findall(R.DISTANCE[:,t].>0)
-unique(R.DISTANCE[:,t])
-density(R.U[3,index,t])
-
-
-m = 1; n = 4
-scatter(R.U[m,index,t],R.U[n,index,t],color=:white,markersize=0.1,markerstrokewidth=0,label="")
-scatter!([θstar[m]],[θstar[n]],markershape=:xcross,markersize=10,color=:springgreen)
-
-
-VSCodeServer.@profview R = RW_SMC_ABC(1000,20,20,Threshold=0.7,δ=0.05,K=50)
