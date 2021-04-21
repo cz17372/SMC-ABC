@@ -105,7 +105,6 @@ function BPS(N,x0,u0,δ,refresh_rate;ϵ,NoData)
     end
     return (X,acc/N)
 end
-
 function ABC_BPS_Update(N,x0,u0,δ,refresh_rate;ϵ,NoData)
     X       = zeros(N,4+NoData)
     X[1,:]  = x0
@@ -162,7 +161,6 @@ function BPS_SMC_ABC(N,T,NoData;Threshold,δ,refresh_rate,K)
     end
     return (U=U,DISTANCE=DISTANCE,WEIGHT=WEIGHT,EPSILON=EPSILON,ANCESTOR=ANCESTOR)
 end
-
 function RWMH(N,x0,ϵ,Σ,δ)
     D = length(x0)
     X = zeros(N,length(x0))
