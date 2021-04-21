@@ -52,3 +52,5 @@ end
 @btime RWMH(10000,x0,270,sigma,0.1)
 @benchmark tRWMH(1000,x0,270,sigma,0.1)
 @benchmark t2RWMH(1000,x0,270,sigma,0.1)
+
+@benchmark rand(MultivariateNormal(zeros(24),sigma),1000)

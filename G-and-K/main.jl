@@ -20,16 +20,12 @@ density(R_MCMC[150001:end,4],linewidth=2.0,color=:darkgreen,label="")
 # Random-walk SMC-ABC
 ystar = dat20
 include("G-and-K/RandomWalk/RW-SMC-ABC.jl")
-R_RW  = RW_SMC_ABC(10000,200,20,Threshold=0.7,δ=0.1,K=100)
+R_RW  = RW_SMC_ABC(1000,200,20,Threshold=0.85,δ=0.1,K=50)
+ESS(x) = length(findall(x .> 0))
 
-plot(log.(R_RW.EPSILON),color=:darkgreen,linewidth=2)
-uni(x) = length(unique(x))
-unique_particles = mapslices(uni,R_RW.DISTANCE,dims=1)[1,:]
-plot(1:201,unique_particles)
-
-t = 200; n=1
-R_RW.EPSILON[t]
+plot(mapslices(ESS, R_RW.WEIGHT, dims = 1)[1,:])
+plot!(mapslices(uni,R_RW.DISTANCE,dims=1)[1,:])
+plot(log.(R_RW.EPSILON))
+t = 201; n= 4
 index = findall(R_RW.DISTANCE[:,t] .> 0)
-density(R_RW.U[n,index,t],color=:red,linewidth=2.0,label="Random-Walk")
-density!(R_MCMC[50001:end,n],label="MCMC",color=:darkgreen,linewidth=2.0)
-sigma = cov(R_RW.U[:,index,t],dims=2)
+density(R_RW.U[n,index,t])
