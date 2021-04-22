@@ -19,6 +19,7 @@ function RWMH(N,x0,ϵ,Σ,δ)
     X = zeros(N,length(x0))
     X[1,:] = x0
     for n = 2:N
+        #xcand = X[n-1,:] .+ δ*L*rand(Normal(0,1),D)
         xcand = rand(MultivariateNormal(X[n-1,:],δ^2*Σ))
         α = min(0,logpi(xcand,ϵ=ϵ)-logpi(X[n-1,:],ϵ=ϵ))
         if log(rand(Uniform(0,1))) < α
@@ -50,6 +51,7 @@ function RW_SMC_ABC(N,T,NoData;Threshold,δ,K)
         end
         WEIGHT[:,t+1] = (DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1])/sum(DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1])
         Σ = cov(U[:,findall(WEIGHT[:,t].>0),t],dims=2) + 1e-8*I
+        # L = cholesky(Σ).L
         index = findall(WEIGHT[:,t+1] .> 0.0)
         Threads.@threads for i = 1:length(index)
             U[:,index[i],t+1] = RWMH(K,U[:,ANCESTOR[index[i],t],t],EPSILON[t+1],Σ,δ)
