@@ -49,7 +49,6 @@ function RW_SMC_ABC(N,T,NoData;Threshold,δ,K)
     WEIGHT[:,1] .= 1/N
     EPSILON[1] = findmax(DISTANCE[:,1])[1]
     for t = 1:T
-        println("SMC Step: ", t)
         ANCESTOR[:,t] = vcat(fill.(1:N,rand(Multinomial(N,WEIGHT[:,t])))...);
         if length(unique(DISTANCE[ANCESTOR[:,t],t])) > Int(floor(0.4*N))
             EPSILON[t+1] = quantile(unique(DISTANCE[ANCESTOR[:,t],t]),Threshold)
