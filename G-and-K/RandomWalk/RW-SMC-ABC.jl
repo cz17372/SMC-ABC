@@ -57,6 +57,7 @@ function RW_SMC_ABC(N,T,NoData;Threshold,δ,K)
             EPSILON[t+1],_ = findmax(unique(DISTANCE[ANCESTOR[:,t],t]))
         end
         WEIGHT[:,t+1] = (DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1])/sum(DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1])
+        println("SMC Step: ", t, "epsilon = ", round(EPSILON[t+1],sigdigits=5))
         Σ = cov(U[:,findall(WEIGHT[:,t].>0),t],dims=2) + 1e-8*I
         # L = cholesky(Σ).L
         index = findall(WEIGHT[:,t+1] .> 0.0)
