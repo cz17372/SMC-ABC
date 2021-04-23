@@ -12,9 +12,9 @@ dat20 = f.(rand(Normal(0,1),20),θ=θ0)
 # Random the MCMC sampler
 include("G-and-K/MCMC/MCMC.jl")
 @load "G-and-K/MCMC/MCMC_COV.jld2"
-R_MCMC,α_MCMC = RWM(300000,Σ,0.2,y = dat20,θ0 = rand(Uniform(0,10),4))
+R_MCMC,α_MCMC = RWM(30000,Σ,0.2,y = dat20,θ0 = rand(Uniform(0,10),4))
 plot(R_MCMC[:,4],linewidth=2.0,color=:grey)
-density(R_MCMC[150001:end,4],linewidth=2.0,color=:darkgreen,label="")
+density(R_MCMC[15001:end,3],linewidth=2.0,color=:darkgreen,label="")
 
 
 # Random-walk SMC-ABC

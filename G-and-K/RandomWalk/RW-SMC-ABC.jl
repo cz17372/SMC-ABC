@@ -1,6 +1,12 @@
 # To make fair comparison, we set 
+#=
 function dist(ξ)
     return sum((f.(ξ[5:end],θ=ξ[1:4]) .- ystar).^2)
+end
+=#
+
+function dist(ξ)
+    return norm(sort(f.(ξ[5:end],θ=ξ[1:4])) .- ystar)
 end
 
 C(ξ;ϵ) = dist(ξ) - ϵ
