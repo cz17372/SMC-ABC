@@ -6,7 +6,7 @@ end
 =#
 
 function dist(ξ)
-    return norm(sort(f.(ξ[5:end],θ=ξ[1:4])) .- ystar)
+    return norm(sort(f.(ξ[5:end],θ=ξ[1:4])) .- sort(ystar))
 end
 
 C(ξ;ϵ) = dist(ξ) - ϵ
@@ -48,7 +48,8 @@ function RW_SMC_ABC(N,T,NoData;Threshold,δ,K)
     end
     WEIGHT[:,1] .= 1/N
     EPSILON[1] = findmax(DISTANCE[:,1])[1]
-    @showprogress 1 "Computing.."  for t = 1:T
+    for t = 1:T
+        println("SMC Step: ", t)
         ANCESTOR[:,t] = vcat(fill.(1:N,rand(Multinomial(N,WEIGHT[:,t])))...);
         if length(unique(DISTANCE[ANCESTOR[:,t],t])) > Int(floor(0.4*N))
             EPSILON[t+1] = quantile(unique(DISTANCE[ANCESTOR[:,t],t]),Threshold)
@@ -59,7 +60,8 @@ function RW_SMC_ABC(N,T,NoData;Threshold,δ,K)
         Σ = cov(U[:,findall(WEIGHT[:,t].>0),t],dims=2) + 1e-8*I
         # L = cholesky(Σ).L
         index = findall(WEIGHT[:,t+1] .> 0.0)
-        Threads.@threads for i = 1:length(index)
+        println("Performing local Metropolis-Hastings...")
+        @time Threads.@threads for i = 1:length(index)
             U[:,index[i],t+1] = RWMH(K,U[:,ANCESTOR[index[i],t],t],EPSILON[t+1],Σ,δ)
             GC.safepoint()
             DISTANCE[index[i],t+1] = dist(U[:,index[i],t+1])
