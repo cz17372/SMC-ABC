@@ -46,7 +46,14 @@ function α2b(x,u,δ)
     return min(0,llk_ratio)
 end
 
+"""
 
+    BPS(N,x0,μ0,δ)
+
+A Discrete Bouncy Particle Sampler
+# Arguments
+- `N: Integer`: Sample size of output of the BPS algorithm
+"""
 function BPS(N,x0,u0,δ)
     X = zeros(N,2)
     X[1,:] = x0

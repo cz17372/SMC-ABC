@@ -10,6 +10,7 @@ function dist(ξ)
 end
 
 C(ξ;ϵ) = dist(ξ) - ϵ
+
 function logpi(ξ;ϵ)
     if C(ξ,ϵ=ϵ) < 0
         logpdf_θ = sum(logpdf.(Uniform(0,10),ξ[1:4]))

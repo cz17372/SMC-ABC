@@ -32,3 +32,4 @@ index = findall(R_RW.DISTANCE[:,t0] .> 0)
 density(R_RW.U[n,index,t0],label="Random-Walk SMC-ABC",title="epsilon =$(R_RW.EPSILON[101])")
 density!(R_MCMC[15001:end,n],label="MCMC")
 
+include("G-and-K/BPS/BpsDemo.jl")
