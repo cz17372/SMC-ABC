@@ -1,6 +1,6 @@
 using LinearAlgebra, Distributions
 function dist(ξ)
-    return sum((f.(ξ[5:end],θ=ξ[1:4]) .- ystar).^2)
+    return norm(f.(ξ[5:end],θ=ξ[1:4]) .- ystar)
 end
 
 #=
