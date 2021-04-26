@@ -37,14 +37,16 @@ function RWMH(N,x0,ϵ,Σ,δ)
             X[n,:] = X[n-1,:]
         end
     end
-    return (X[end,:],AcceptedNum/(N-1))
+    return (X[end,:],AcceptedNum)
 end
-function RW_SMC_ABC(N,T,NoData;Threshold,δ,K)
+function RW_SMC_ABC(N,T,NoData;Threshold,δ,K0)
     U = zeros(4+NoData,N,T+1)
     EPSILON = zeros(T+1)
     DISTANCE = zeros(N,T+1)
     WEIGHT = zeros(N,T+1)
     ANCESTOR = zeros(Int,N,T)
+    K = zeros(Int64,T+1)
+    K[1] = K0
     for i = 1:N
         U[:,i,1] = [rand(Uniform(0,10),4);rand(Normal(0,1),NoData)]
         DISTANCE[i,1] = dist(U[:,i,1])
@@ -61,18 +63,22 @@ function RW_SMC_ABC(N,T,NoData;Threshold,δ,K)
             EPSILON[t+1],_ = findmax(unique(DISTANCE[ANCESTOR[:,t],t]))
         end
         WEIGHT[:,t+1] = (DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1])/sum(DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1])
-        println("SMC Step: ", t, " epsilon = ", round(EPSILON[t+1],sigdigits=5), " No. Unique Starting Point: ", length(unique(DISTANCE[ANCESTOR[:,t],t])))
+        println("SMC Step: ", t)
+        println("epsilon = ", round(EPSILON[t+1],sigdigits=5), " No. Unique Starting Point: ", length(unique(DISTANCE[ANCESTOR[:,t],t])))
+        println("K = ", K[t])
         Σ = cov(U[:,findall(WEIGHT[:,t].>0),t],dims=2) + 1e-8*I
         # L = cholesky(Σ).L
         index = findall(WEIGHT[:,t+1] .> 0.0)
         println("Performing local Metropolis-Hastings...")
         @time Threads.@threads for i = 1:length(index)
-            U[:,index[i],t+1],ParticleAcceptProb[index[i]] = RWMH(K,U[:,ANCESTOR[index[i],t],t],EPSILON[t+1],Σ,δ)
+            U[:,index[i],t+1],ParticleAcceptProb[index[i]] = RWMH(K[t],U[:,ANCESTOR[index[i],t],t],EPSILON[t+1],Σ,δ)
             GC.safepoint()
             DISTANCE[index[i],t+1] = dist(U[:,index[i],t+1])
         end
-        MH_AcceptProb[t] = mean(ParticleAcceptProb[index])
+        MH_AcceptProb[t] = mean(ParticleAcceptProb[index])/K[t]
+        K[t+1] = Int64(ceil(log(0.01)/log(1-MH_AcceptProb[t])))
         println("Average Acceptance Probability is ", MH_AcceptProb[t])
+        print("\n\n")
     end
     return (U=U,DISTANCE=DISTANCE,WEIGHT=WEIGHT,EPSILON=EPSILON,ANCESTOR=ANCESTOR,MH_AcceptProb)
 end
