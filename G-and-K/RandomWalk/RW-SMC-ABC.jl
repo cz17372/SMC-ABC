@@ -4,7 +4,7 @@ function dist(ξ)
     return sum((f.(ξ[5:end],θ=ξ[1:4]) .- ystar).^2)
 end
 =#
-
+using LinearAlgebra, Distributions
 function dist(ξ)
     return norm(sort(f.(ξ[5:end],θ=ξ[1:4])) .- sort(ystar))
 end
