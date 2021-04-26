@@ -72,7 +72,7 @@ function RW_SMC_ABC(N,T,NoData;Threshold,δ,K)
             DISTANCE[index[i],t+1] = dist(U[:,index[i],t+1])
         end
         MH_AcceptProb[t] = mean(ParticleAcceptProb[index])
-        print("Average Acceptance Probability is ", MH_AcceptProb[t])
+        println("Average Acceptance Probability is ", MH_AcceptProb[t])
     end
     return (U=U,DISTANCE=DISTANCE,WEIGHT=WEIGHT,EPSILON=EPSILON,ANCESTOR=ANCESTOR,MH_AcceptProb)
 end
