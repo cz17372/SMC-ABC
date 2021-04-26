@@ -76,3 +76,7 @@ function BPS(N,x0,u0,δ)
         end
     end
 end
+
+
+wald(n,R,θ0) = n/θ0/(1-θ0) * (R/n-θ0)^2
+quantile(Chisq(1),0.95)

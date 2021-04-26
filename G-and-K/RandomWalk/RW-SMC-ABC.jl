@@ -25,17 +25,19 @@ function RWMH(N,x0,ϵ,Σ,δ)
     D = length(x0)
     X = zeros(N,length(x0))
     X[1,:] = x0
+    AcceptedNum = 0
     for n = 2:N
         #xcand = X[n-1,:] .+ δ*L*rand(Normal(0,1),D)
         xcand = rand(MultivariateNormal(X[n-1,:],δ^2*Σ))
         α = min(0,logpi(xcand,ϵ=ϵ)-logpi(X[n-1,:],ϵ=ϵ))
         if log(rand(Uniform(0,1))) < α
             X[n,:] = xcand
+            AcceptedNum += 1
         else
             X[n,:] = X[n-1,:]
         end
     end
-    return X[end,:]
+    return (X[end,:],AcceptedNum/(N-1))
 end
 function RW_SMC_ABC(N,T,NoData;Threshold,δ,K)
     U = zeros(4+NoData,N,T+1)
@@ -49,6 +51,8 @@ function RW_SMC_ABC(N,T,NoData;Threshold,δ,K)
     end
     WEIGHT[:,1] .= 1/N
     EPSILON[1] = findmax(DISTANCE[:,1])[1]
+    ParticleAcceptProb = zeros(N)
+    MH_AcceptProb = zeros(T)
     for t = 1:T
         ANCESTOR[:,t] = vcat(fill.(1:N,rand(Multinomial(N,WEIGHT[:,t])))...);
         if length(unique(DISTANCE[ANCESTOR[:,t],t])) > Int(floor(0.4*N))
@@ -63,10 +67,11 @@ function RW_SMC_ABC(N,T,NoData;Threshold,δ,K)
         index = findall(WEIGHT[:,t+1] .> 0.0)
         println("Performing local Metropolis-Hastings...")
         @time Threads.@threads for i = 1:length(index)
-            U[:,index[i],t+1] = RWMH(K,U[:,ANCESTOR[index[i],t],t],EPSILON[t+1],Σ,δ)
+            U[:,index[i],t+1],ParticleAcceptProb[index[i]] = RWMH(K,U[:,ANCESTOR[index[i],t],t],EPSILON[t+1],Σ,δ)
             GC.safepoint()
             DISTANCE[index[i],t+1] = dist(U[:,index[i],t+1])
         end
+        MH_AcceptProb[t] = mean(ParticleAcceptProb[index])
     end
-    return (U=U,DISTANCE=DISTANCE,WEIGHT=WEIGHT,EPSILON=EPSILON,ANCESTOR=ANCESTOR)
+    return (U=U,DISTANCE=DISTANCE,WEIGHT=WEIGHT,EPSILON=EPSILON,ANCESTOR=ANCESTOR,MH_AcceptProb)
 end
