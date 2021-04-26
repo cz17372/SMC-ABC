@@ -80,5 +80,5 @@ function RW_SMC_ABC(N,T,NoData;Threshold,δ,K0)
         println("Average Acceptance Probability is ", MH_AcceptProb[t])
         print("\n\n")
     end
-    return (U=U,DISTANCE=DISTANCE,WEIGHT=WEIGHT,EPSILON=EPSILON,ANCESTOR=ANCESTOR,MH_AcceptProb)
+    return (U=U,DISTANCE=DISTANCE,WEIGHT=WEIGHT,EPSILON=EPSILON,ANCESTOR=ANCESTOR,AcceptanceProb = MH_AcceptProb, K = K)
 end
