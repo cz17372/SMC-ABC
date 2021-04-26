@@ -19,4 +19,4 @@ density(R_MCMC[15001:end,3],linewidth=2.0,color=:darkgreen,label="")
 # Random-walk SMC-ABC
 ystar = dat20
 include("RandomWalk/RW-SMC-ABC.jl")
-R_RW  = RW_SMC_ABC(10000,300,20,Threshold=0.8,δ=0.1,K=50)
+
