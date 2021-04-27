@@ -19,5 +19,3 @@ density(R_MCMC[15001:end,3],linewidth=2.0,color=:darkgreen,label="")
 # Random-walk SMC-ABC
 ystar = dat20
 include("Langevin/Langevin-SMC-ABC.jl")
-
-R = Langevin_SMC_ABC.L_SMC_ABC(1000,200,20,y=ystar,Threshold=0.8,σ=0.2,K0=20)
