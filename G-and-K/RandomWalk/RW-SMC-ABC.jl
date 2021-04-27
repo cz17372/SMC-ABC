@@ -21,7 +21,6 @@ function logpi(ξ;ϵ)
 end
 
 function RWMH(N,x0,ϵ,Σ,δ)
-    D = length(x0)
     X = zeros(N,length(x0))
     X[1,:] = x0
     AcceptedNum = 0
@@ -64,7 +63,7 @@ function RW_SMC_ABC(N,T,NoData;Threshold,δ,K0)
         WEIGHT[:,t+1] = (DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1])/sum(DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1])
         println("SMC Step: ", t)
         println("epsilon = ", round(EPSILON[t+1],sigdigits=5), " No. Unique Starting Point: ", length(unique(DISTANCE[ANCESTOR[:,t],t])))
-        println("K = ", K[t])
+        println("K = ", K[t])           
         Σ = cov(U[:,findall(WEIGHT[:,t].>0),t],dims=2) + 1e-8*I
         # L = cholesky(Σ).L
         index = findall(WEIGHT[:,t+1] .> 0.0)
