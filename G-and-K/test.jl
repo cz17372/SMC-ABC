@@ -1,56 +1,120 @@
-x0 = rand(Uniform(0,1),24)
-dist(x0)
+using LinearAlgebra
+using ForwardDiff: gradient
+f(z;θ) = θ[1] + θ[2]*(1+0.8*(1-exp(-θ[3]*z))/(1+exp(-θ[3]*z)))*(1+z^2)^θ[4]*z;
 
-@btime RWMH(100,x0,270,sigma,0.1)
+Dist(ξ;y) = norm(f.(ξ[5:end],θ=ξ[1:4]) .- y)
+grad(ξ) = normalize(gradient(Dist,ξ))
 
-ProfileView.@profview RWMH(10000,x0,270,sigma,0.1)
+logPrior(ξ) = sum(logpdf.(Uniform(0,10),ξ[1:4])) + sum(logpdf.(Normal(0,1),ξ[5:end]))
 
-@time R = RWMH(10000,x0,270,sigma,0.1)
-
-L = cholesky(sigma).L
-
-a = rand(Normal(0,1),24,10000)
-
-b = L * a
-cov(b,dims=2)
-
-
-function tRWMH(N,x0,ϵ,Σ,δ)
-    D = length(x0)
-    X = zeros(N,length(x0))
-    L = cholesky(Σ).L
-    X[1,:] = x0
+function LSMCABC_LocalMH(N,ξ0,ϵ;Σ,σ,y) 
+    ξ = zeros(N,length(ξ0))
+    ξ[1,:] = ξ0
+    AcceptedNum = 0
     for n = 2:N
-        xcand = X[n-1,:] .+ δ *L * rand(Normal(0,1),D)
-        α = min(0,logpi(xcand,ϵ=ϵ)-logpi(X[n-1,:],ϵ=ϵ))
-        if log(rand(Uniform(0,1))) < α
-            X[n,:] = xcand
+        μ = ξ[n-1,:] .- σ^2/2*Σ*gradient(x->Dist(x,y=y),ξ[n-1,:])
+        newξ = rand(MultivariateNormal(μ,σ^2*Σ))
+        reverseμ = newξ .- σ^2/2 * Σ * gradient(x-> Dist(x,y=y),ξ[n-1,:])
+        forward_proposal_density = logpdf(MultivariateNormal(μ,σ^2*Σ),newξ)
+        backward_proposal_density = logpdf(MultivariateNormal(reverseμ,σ^2*Σ),ξ[n-1,:])
+        log_proposal_ratio = backward_proposal_density-forward_proposal_density
+        log_prior_ratio = logPrior(newξ) - logPrior(ξ[n-1,:])
+        u = log(rand(Uniform(0,1)))
+        if u > log_prior_ratio + log_proposal_ratio
+            ξ[n,:] = ξ[n-1,:]
         else
-            X[n,:] = X[n-1,:]
+            if Dist(newξ,y=y) < ϵ
+                ξ[n,:] = newξ
+                AcceptedNum += 1
+            else
+                ξ[n,:] = ξ[n-1,:]
+            end
         end
     end
-    return X[end,:]
+    return ξ[end,:],AcceptedNum
 end
 
-function t2RWMH(N,x0,ϵ,Σ,δ)
-    D = length(x0)
-    X = zeros(N,length(x0))
-    L = cholesky(Σ).L
-    X[1,:] = x0
-    for n = 2:N
-        X[n,:] = X[n-1,:] .+ δ *L * rand(Normal(0,1),D)
-        α = min(0,logpi(X[n,:],ϵ=ϵ)-logpi(X[n-1,:],ϵ=ϵ))
-        if log(rand(Uniform(0,1))) > α
-            X[n,:] = X[n-1,:]
-        end
+function L_SMC_ABC(N,T,NoData;y,Threshold,σ,K0)
+    XI = zeros(4+NoData,N,T+1)
+    EPSILON = zeros(T+1)
+    DISTANCE = zeros(N,T+1)
+    WEIGHT = zeros(N,T+1)
+    ANCESTOR = zeros(Int,N,T)
+    K = zeros(Int64,T+1)
+    K[1] = K0
+    for i = 1:N
+        XI[:,i,1] = [rand(Uniform(0,10),4);rand(Normal(0,1),NoData)]
+        DISTANCE[i,1] = Dist(XI[:,i,1],y=y)
     end
-    return X[end,:]
+    WEIGHT[:,1] .= 1/N
+    EPSILON[1] = findmax(DISTANCE[:,1])[1]
+    ParticleAcceptProb = zeros(N)
+    MH_AcceptProb = zeros(T)
+    for t = 1:T
+        ANCESTOR[:,t] = vcat(fill.(1:N,rand(Multinomial(N,WEIGHT[:,t])))...);
+        if length(unique(DISTANCE[ANCESTOR[:,t],t])) > Int(floor(0.4*N))
+            EPSILON[t+1] = quantile(unique(DISTANCE[ANCESTOR[:,t],t]),Threshold)
+        else
+            EPSILON[t+1],_ = findmax(unique(DISTANCE[ANCESTOR[:,t],t]))
+        end
+        WEIGHT[:,t+1] = (DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1])/sum(DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1])
+        println("SMC Step: ", t)
+        println("epsilon = ", round(EPSILON[t+1],sigdigits=5), " No. Unique Starting Point: ", length(unique(DISTANCE[ANCESTOR[:,t],t])))
+        println("K = ", K[t])
+        Σ = cov(XI[:,findall(WEIGHT[:,t].>0),t],dims=2) + 1e-8*I
+        # L = cholesky(Σ).L
+        index = findall(WEIGHT[:,t+1] .> 0.0)
+        println("Performing local Metropolis-Hastings...")
+        @time Threads.@threads for i = 1:length(index)
+            XI[:,index[i],t+1],ParticleAcceptProb[index[i]] = LSMCABC_LocalMH(K[t],XI[:,ANCESTOR[index[i],t],t],EPSILON[t+1],Σ=Σ,σ=σ,y=y)
+            DISTANCE[index[i],t+1] = Dist(XI[:,index[i],t+1],y=y)
+        end
+        MH_AcceptProb[t] = mean(ParticleAcceptProb[index])/K[t]
+        K[t+1] = Int64(ceil(log(0.01)/log(1-MH_AcceptProb[t])))
+        println("Average Acceptance Probability is ", MH_AcceptProb[t])
+        print("\n\n")
+    end
+    return (XI=XI,DISTANCE=DISTANCE,WEIGHT=WEIGHT,EPSILON=EPSILON,ANCESTOR=ANCESTOR,AcceptanceProb=MH_AcceptProb,K=K)
 end
 
-@time tRWMH(10000,x0,270,sigma,0.1)
-@time RWMH(10000,x0,270,sigma,0.1)
-@btime RWMH(10000,x0,270,sigma,0.1)
-@benchmark tRWMH(1000,x0,270,sigma,0.1)
-@benchmark t2RWMH(1000,x0,270,sigma,0.1)
 
-@benchmark rand(MultivariateNormal(zeros(24),sigma),1000)
+
+N = 1000; T = 200; NoData = 20; y = ystar; Threshold= 0.8; σ=0.1;K0 = 20
+
+XI = zeros(4+NoData,N,T+1)
+EPSILON = zeros(T+1)
+DISTANCE = zeros(N,T+1)
+WEIGHT = zeros(N,T+1)
+ANCESTOR = zeros(Int,N,T)
+K = zeros(Int64,T+1)
+K[1] = K0
+for i = 1:N
+    XI[:,i,1] = [rand(Uniform(0,10),4);rand(Normal(0,1),NoData)]
+    DISTANCE[i,1] = Dist(XI[:,i,1],y=y)
+end
+WEIGHT[:,1] .= 1/N
+EPSILON[1] = findmax(DISTANCE[:,1])[1]
+ParticleAcceptProb = zeros(N)
+MH_AcceptProb = zeros(T)
+
+t = 1
+
+ANCESTOR[:,t] = vcat(fill.(1:N,rand(Multinomial(N,WEIGHT[:,t])))...);
+if length(unique(DISTANCE[ANCESTOR[:,t],t])) > Int(floor(0.4*N))
+    EPSILON[t+1] = quantile(unique(DISTANCE[ANCESTOR[:,t],t]),Threshold)
+else
+    EPSILON[t+1],_ = findmax(unique(DISTANCE[ANCESTOR[:,t],t]))
+end
+
+WEIGHT[:,t+1] = (DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1])/sum(DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1])
+
+Σ = cov(XI[:,findall(WEIGHT[:,t].>0),t],dims=2) + 1e-8*I
+index = findall(WEIGHT[:,t+1] .> 0.0)
+
+@time Threads.@threads for i = 1:length(index)
+    XI[:,index[i],t+1],ParticleAcceptProb[index[i]] = LSMCABC_LocalMH(K[t],XI[:,ANCESTOR[index[i],t],t],EPSILON[t+1],Σ=Σ,σ=0.01,y=y)
+    DISTANCE[index[i],t+1] = Dist(XI[:,index[i],t+1],y=y)
+end
+MH_AcceptProb[t] = mean(ParticleAcceptProb[index])/K[t]
+
+norm(gradient(x->Langevin_SMC_ABC.Dist(x,y=ystar),rand(Uniform(0,1),24)))
