@@ -1,6 +1,8 @@
+module RandomWalk
+
 using LinearAlgebra, Distributions
-function dist(ξ)
-    return norm(f.(ξ[5:end],θ=ξ[1:4]) .- ystar)
+function Dist(ξ;y)
+    return norm(f.(ξ[5:end],θ=ξ[1:4]) .- y)
 end
 
 #=
@@ -8,10 +10,10 @@ function dist(ξ)
     return norm(sort(f.(ξ[5:end],θ=ξ[1:4])) .- sort(ystar))
 end
 =#
-C(ξ;ϵ) = dist(ξ) - ϵ
+C(ξ;ϵ,y) = Dist(ξ,y=y) - ϵ
 
-function logpi(ξ;ϵ)
-    if C(ξ,ϵ=ϵ) < 0
+function logpi(ξ;ϵ,y)
+    if C(ξ,ϵ=ϵ,y=y) < 0
         logpdf_θ = sum(logpdf.(Uniform(0,10),ξ[1:4]))
         logpdf_z = sum(logpdf.(Normal(0,1),ξ[5:end]))
         return logpdf_θ + logpdf_z
@@ -20,14 +22,14 @@ function logpi(ξ;ϵ)
     end
 end
 
-function RWMH(N,x0,ϵ,Σ,δ)
+function RWMH(N,x0,ϵ;y,δ,Σ)
     X = zeros(N,length(x0))
     X[1,:] = x0
     AcceptedNum = 0
     for n = 2:N
         #xcand = X[n-1,:] .+ δ*L*rand(Normal(0,1),D)
         xcand = rand(MultivariateNormal(X[n-1,:],δ^2*Σ))
-        α = min(0,logpi(xcand,ϵ=ϵ)-logpi(X[n-1,:],ϵ=ϵ))
+        α = min(0,logpi(xcand,ϵ=ϵ,y=y)-logpi(X[n-1,:],ϵ=ϵ,y=y))
         if log(rand(Uniform(0,1))) < α
             X[n,:] = xcand
             AcceptedNum += 1
@@ -37,7 +39,8 @@ function RWMH(N,x0,ϵ,Σ,δ)
     end
     return (X[end,:],AcceptedNum)
 end
-function RW_SMC_ABC(N,T,NoData;Threshold,δ,K0)
+function RW_SMC_ABC(N,T,y;Threshold,δ,K0)
+    NoData = length(y)
     U = zeros(4+NoData,N,T+1)
     EPSILON = zeros(T+1)
     DISTANCE = zeros(N,T+1)
@@ -47,7 +50,7 @@ function RW_SMC_ABC(N,T,NoData;Threshold,δ,K0)
     K[1] = K0
     for i = 1:N
         U[:,i,1] = [rand(Uniform(0,10),4);rand(Normal(0,1),NoData)]
-        DISTANCE[i,1] = dist(U[:,i,1])
+        DISTANCE[i,1] = Dist(U[:,i,1],y=y)
     end
     WEIGHT[:,1] .= 1/N
     EPSILON[1] = findmax(DISTANCE[:,1])[1]
@@ -79,4 +82,7 @@ function RW_SMC_ABC(N,T,NoData;Threshold,δ,K0)
         print("\n\n")
     end
     return (U=U,DISTANCE=DISTANCE,WEIGHT=WEIGHT,EPSILON=EPSILON,ANCESTOR=ANCESTOR,AcceptanceProb = MH_AcceptProb, K = K)
+end
+
+
 end

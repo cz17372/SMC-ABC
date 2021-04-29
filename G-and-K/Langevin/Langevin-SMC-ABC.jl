@@ -1,11 +1,10 @@
-module Langevin_SMC_ABC
+module Langevin
 using Distributions, LinearAlgebra
 using ForwardDiff: gradient
 
 f(z;θ) = θ[1] + θ[2]*(1+0.8*(1-exp(-θ[3]*z))/(1+exp(-θ[3]*z)))*(1+z^2)^θ[4]*z;
 
 Dist(ξ;y) = norm(f.(ξ[5:end],θ=ξ[1:4]) .- y)
-grad(ξ) = normalize(gradient(Dist,ξ))
 
 logPrior(ξ) = sum(logpdf.(Uniform(0,10),ξ[1:4])) + sum(logpdf.(Normal(0,1),ξ[5:end]))
 
@@ -36,7 +35,7 @@ function LSMCABC_LocalMH(N,ξ0,ϵ;Σ,σ,y)
     return ξ[end,:],AcceptedNum
 end
 
-function L_SMC_ABC(N,T,NoData;y,Threshold,σ,K0)
+function Langevin_SMC_ABC(N,T,NoData;y,Threshold,σ,K0)
     XI = zeros(4+NoData,N,T+1)
     EPSILON = zeros(T+1)
     DISTANCE = zeros(N,T+1)
