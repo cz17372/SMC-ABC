@@ -1,6 +1,9 @@
 module RandomWalk
 
 using LinearAlgebra, Distributions
+
+f(z;θ) = θ[1] + θ[2]*(1+0.8*(1-exp(-θ[3]*z))/(1+exp(-θ[3]*z)))*(1+z^2)^θ[4]*z;
+
 function Dist(ξ;y)
     return norm(f.(ξ[5:end],θ=ξ[1:4]) .- y)
 end
@@ -72,9 +75,9 @@ function RW_SMC_ABC(N,T,y;Threshold,δ,K0)
         index = findall(WEIGHT[:,t+1] .> 0.0)
         println("Performing local Metropolis-Hastings...")
         @time Threads.@threads for i = 1:length(index)
-            U[:,index[i],t+1],ParticleAcceptProb[index[i]] = RWMH(K[t],U[:,ANCESTOR[index[i],t],t],EPSILON[t+1],Σ,δ)
+            U[:,index[i],t+1],ParticleAcceptProb[index[i]] = RWMH(K[t],U[:,ANCESTOR[index[i],t],t],EPSILON[t+1],y=y,δ=δ,Σ=Σ)
             GC.safepoint()
-            DISTANCE[index[i],t+1] = dist(U[:,index[i],t+1])
+            DISTANCE[index[i],t+1] = Dist(U[:,index[i],t+1],y=y)
         end
         MH_AcceptProb[t] = mean(ParticleAcceptProb[index])/K[t]
         K[t+1] = Int64(ceil(log(0.01)/log(1-MH_AcceptProb[t])))

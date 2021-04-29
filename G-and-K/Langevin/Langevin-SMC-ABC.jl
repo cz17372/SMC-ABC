@@ -35,7 +35,8 @@ function LSMCABC_LocalMH(N,ξ0,ϵ;Σ,σ,y)
     return ξ[end,:],AcceptedNum
 end
 
-function Langevin_SMC_ABC(N,T,NoData;y,Threshold,σ,K0)
+function Langevin_SMC_ABC(N,T,y;Threshold,σ,K0)
+    NoData = length(y)
     XI = zeros(4+NoData,N,T+1)
     EPSILON = zeros(T+1)
     DISTANCE = zeros(N,T+1)
