@@ -82,16 +82,25 @@ function BPS_LocalMH(N,x0,δ,κ;y,ϵ,Σ)
     u0 = rand(MultivariateNormal(zeros(length(x0)),Σ))
     AcceptedNum = 0
     boundfunc(x) = C(x,y=y,ϵ=ϵ)
+    EnergyBounceTime = 0
+    EnergyBounceSuccess = 0
+    BoundaryBounceTime = 0
+    BoundaryBounceSuccess= 0
+    EnergyBounceLogVelRatio = 0.0
+    BoundaryBounceLogVelRatio = 0.0
     for n = 2:N
         x1,u1 = φ1(X[n-1,:],u0,δ)
         if (any([(x1[1:4].>10);(x1[1:4] .< 0)])) || (Dist(x1,y=y) >= ϵ)
+            BoundaryBounceTime += 1
             x2,u2 = φ2(X[n-1,:],u0,δ,BounceType=BoundaryBounce,gradFunc=boundfunc)
             alpha2 = α2(X[n-1,:],u0,δ;y=y,ϵ=ϵ,Σ=Σ,BounceType=BoundaryBounce,gradFunc=boundfunc)
             if log(rand(Uniform(0,1))) < alpha2
+                BoundaryBounceSuccess += 1
                 AcceptedNum += 1
                 xhat=x2
                 uhat=u2
             else
+                BoundaryBounceLogVelRatio += logpdf(MultivariateNormal(zeros(length(u0)),Σ),u2)-logpdf(MultivariateNormal(zeros(length(u2)),Σ),u0)
                 xhat=X[n-1,:]
                 uhat=u0
             end
@@ -102,13 +111,16 @@ function BPS_LocalMH(N,x0,δ,κ;y,ϵ,Σ)
                 xhat = x1
                 uhat = u1
             else
+                EnergyBounceTime += 1
                 x2,u2 = φ2(X[n-1,:],u0,δ,BounceType=EnergyBounce,gradFunc=U)
                 alpha2 = α2(X[n-1,:],u0,δ;y=y,ϵ=ϵ,Σ=Σ,BounceType=EnergyBounce,gradFunc=U)
                 if log(rand(Uniform(0,1))) < alpha2
+                    EnergyBounceSuccess += 1
                     xhat = x2
                     uhat = u2
                     AcceptedNum += 1
                 else
+                    EnergyBounceLogVelRatio += logpdf(MultivariateNormal(zeros(length(u0)),Σ),u2)-logpdf(MultivariateNormal(zeros(length(u2)),Σ),u0)
                     xhat = X[n-1,:]
                     uhat = u0
                 end
@@ -120,7 +132,7 @@ function BPS_LocalMH(N,x0,δ,κ;y,ϵ,Σ)
         X[n,:] = xhat
         u0 = DirectionRefresh(uhat,κ,Σ)
     end
-    return X[end,:],AcceptedNum
+    return X[end,:],AcceptedNum, EnergyBounceTime,EnergyBounceSuccess,BoundaryBounceTime,BoundaryBounceSuccess,EnergyBounceLogVelRatio,BoundaryBounceLogVelRatio
 end
 
 #-------------------------- BPS_SMC_ABC -------------------------------------------#
@@ -141,6 +153,18 @@ function BPS_SMC_ABC(N,T,y;Threshold,δ,κ,K0)
     EPSILON[1] = findmax(DISTANCE[:,1])[1]
     ParticleAcceptProb = zeros(N)
     MH_AcceptProb = zeros(T)
+    EnergyBounceAccepted = zeros(T)
+    EnergyBounceProposed = zeros(T)
+    BoundaryBounceAccepted = zeros(T)
+    BoundaryBounceProposed = zeros(T)
+    EnergyBounceTimeVec = zeros(N)
+    EnergyBounceSuccessVec = zeros(N)
+    BoundaryBounceTimeVec = zeros(N)
+    BoundaryBounceSuccessVec = zeros(N)
+    RejectedEnergyBounceAveLogVelRatio = zeros(T)
+    RejectedEnergyBounceLogVelVec = zeros(N)
+    RejectedBoundaryBounceAveLogVelRatio = zeros(T)
+    RejectedBoundaryBounceLogVelVec=zeros(N)
     for t = 1:T
         ANCESTOR[:,t] = vcat(fill.(1:N,rand(Multinomial(N,WEIGHT[:,t])))...);
         if length(unique(DISTANCE[ANCESTOR[:,t],t])) > Int(floor(0.4*N))
@@ -157,15 +181,21 @@ function BPS_SMC_ABC(N,T,y;Threshold,δ,κ,K0)
         d = mean(mapslices(norm,rand(MultivariateNormal(zeros(4+NoData),Σ),100000),dims=1))
         println("Performing local Metropolis-Hastings...")
         @time Threads.@threads for i = 1:length(index)
-            U[:,index[i],t+1],ParticleAcceptProb[index[i]] = BPS_LocalMH(K[t],U[:,ANCESTOR[index[i],t],t],δ,κ,y=y,ϵ=EPSILON[t+1],Σ = 1.0/d^2*Σ)
+            U[:,index[i],t+1],ParticleAcceptProb[index[i]],EnergyBounceTimeVec[i],EnergyBounceSuccessVec[i],BoundaryBounceTimeVec[i],BoundaryBounceSuccessVec[i],RejectedEnergyBounceLogVelVec[i],RejectedBoundaryBounceLogVelVec[i] = BPS_LocalMH(K[t],U[:,ANCESTOR[index[i],t],t],δ,κ,y=y,ϵ=EPSILON[t+1],Σ = 1.0/d^2*Σ)
             DISTANCE[index[i],t+1] = Dist(U[:,index[i],t+1],y=y)
         end
         MH_AcceptProb[t] = mean(ParticleAcceptProb[index])/K[t]
+        EnergyBounceAccepted[t] = sum(EnergyBounceSuccessVec)
+        EnergyBounceProposed[t] = sum(EnergyBounceTimeVec)
+        BoundaryBounceAccepted[t] = sum(BoundaryBounceSuccessVec)
+        BoundaryBounceProposed[t] = sum(BoundaryBounceTimeVec)
+        RejectedEnergyBounceAveLogVelRatio[t] = sum(RejectedEnergyBounceLogVelVec)/(EnergyBounceProposed[t]-EnergyBounceAccepted[t])
+        RejectedBoundaryBounceAveLogVelRatio[t] = sum(RejectedBoundaryBounceLogVelVec)/(BoundaryBounceProposed[t]-BoundaryBounceAccepted[t])
         K[t+1] = Int64(ceil(log(0.01)/log(1-MH_AcceptProb[t])))
         println("Average Acceptance Probability is ", MH_AcceptProb[t])
         print("\n\n")
     end
-    return (U=U,DISTANCE=DISTANCE,WEIGHT=WEIGHT,EPSILON=EPSILON,ANCESTOR=ANCESTOR,AcceptanceProb=MH_AcceptProb,K=K)
+    return (U=U,DISTANCE=DISTANCE,WEIGHT=WEIGHT,EPSILON=EPSILON,ANCESTOR=ANCESTOR,AcceptanceProb=MH_AcceptProb,K=K,EnergyBounceAccepted =EnergyBounceAccepted,EnergyBounceProposed=EnergyBounceProposed,BoundaryBounceAccepted=BoundaryBounceAccepted,BoundaryBounceProposed=BoundaryBounceProposed,RejectedBoundary=RejectedBoundaryBounceAveLogVelRatio,RejectedEnergy=RejectedEnergyBounceAveLogVelRatio)
 end
 end
 
