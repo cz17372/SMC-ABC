@@ -10,8 +10,25 @@ function Dist(ξ;y)
 end
 =#
 
+#=
 function Dist(ξ;y)
     return norm(sort(f.(ξ[5:end],θ=ξ[1:4])) .- sort(y))
+end
+=#
+
+function Dist(ξ;y)
+    quantile_y = quantile(y,1/8*(1:8))
+    x = f.(ξ[5:end],θ =ξ[1:4])
+    quantile_x = quantile(x,1/8*(1:8))
+    xA = quantile_x[4]
+    yA = quantile_y[4]
+    xB = quantile_x[6] - quantile_x[2]
+    yB = quantile_y[6] - quantile_y[2]
+    xg = (quantile_x[6] + quantile_x[2] - 2*quantile_x[4])/xB
+    yg = (quantile_y[6] + quantile_y[2] - 2*quantile_y[4])/yB
+    xk = (quantile_x[7] - quantile_x[5] + quantile_x[3] - quantile_x[1])/xB
+    yk = (quantile_y[7] - quantile_y[5] + quantile_y[3] - quantile_y[1])/yB
+    return norm([xA,xB,xg,xk] .- [yA,yB,yg,yk])
 end
 
 C(ξ;ϵ,y) = Dist(ξ,y=y) - ϵ
