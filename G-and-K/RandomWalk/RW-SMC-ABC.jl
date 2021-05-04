@@ -4,15 +4,16 @@ using LinearAlgebra, Distributions
 using Plots, StatsPlots
 f(z;θ) = θ[1] + θ[2]*(1+0.8*(1-exp(-θ[3]*z))/(1+exp(-θ[3]*z)))*(1+z^2)^θ[4]*z;
 
+#=
 function Dist(ξ;y)
     return norm(f.(ξ[5:end],θ=ξ[1:4]) .- y)
 end
-
-#=
-function dist(ξ)
-    return norm(sort(f.(ξ[5:end],θ=ξ[1:4])) .- sort(ystar))
-end
 =#
+
+function Dist(ξ;y)
+    return norm(sort(f.(ξ[5:end],θ=ξ[1:4])) .- sort(y))
+end
+
 C(ξ;ϵ,y) = Dist(ξ,y=y) - ϵ
 
 function logpi(ξ;ϵ,y)
