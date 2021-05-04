@@ -1,7 +1,8 @@
 module RandomWalk
 
 using LinearAlgebra, Distributions
-
+using LaTeXStrings
+using Plots, StatsPlots
 f(z;θ) = θ[1] + θ[2]*(1+0.8*(1-exp(-θ[3]*z))/(1+exp(-θ[3]*z)))*(1+z^2)^θ[4]*z;
 
 function Dist(ξ;y)
@@ -87,5 +88,59 @@ function RW_SMC_ABC(N,T,y;Threshold,δ,K0)
     return (U=U,DISTANCE=DISTANCE,WEIGHT=WEIGHT,EPSILON=EPSILON,ANCESTOR=ANCESTOR,AcceptanceProb = MH_AcceptProb, K = K)
 end
 
+function Epsilon(R;title="",label="",xlabel="Iteration",ylabel="log-Epsilon",color=:springgreen,new=true,figsize=(600,600))
+    if new
+        plot(log.(R.EPSILON),label=label,title=title,color=color,size=figsize)
+    else
+        plot!(log.(R.EPSILON),label=label,title=title,color=color)
+    end
+end
+
+function ESS(R;title="",label="",xlabel="Iteration",ylabel="ESS",color=:springgreen,new=true,figsize=(600))
+    N,T = size(R.WEIGHT)
+    ESS = zeros(T)
+    for i = 1:T
+        ESS[i] = sum(R.WEIGHT[:,i] .> 0)
+    end
+    if new
+        plot(ESS,xlabel=xlabel,ylabel=ylabel,title=title,label=label,color=color,size=figsize)
+    else
+        plot!(ESS,xlabel=xlabel,ylabel=ylabel,title=title,label=label,color=color)
+    end
+end
+
+function UniqueParticle(R,title="",label="",xlabel="Iteration",ylabel="Unique Particle",color=:springgreen,new=true,figsize=(600,600))
+    N,T = size(R.WEIGHT)
+    UniqueParticles = zeros(T)
+    for i = 1:T
+        index = findall(R.DISTANCE[:,i] .> 0)
+        UniqueParticles[i] = length(unique(R.DISTANCE[index,i]))
+    end
+    if new
+        plot(UniqueParticles,xlabel=xlabel,ylabel=ylabel,title=title,label=label,color=color,size=figsize)
+    else
+        plot!(UniqueParticles,xlabel=xlabel,ylabel=ylabel,title=title,label=label,color=color)
+    end
+end
+
+
+function epdf(R,Var,t;title="",label="",xlabel="",ylabel="Density",trueval=nothing,color=:springgreen,new=true,figsize=(600,600))
+    index = findall(R.WEIGHT[:,t] .> 0)
+    if new
+        if trueval == nothing
+            density(R.U[Var,index,t],title=title,label=label,xlabel=xlabel,ylabel=ylabel,color=color,size=figsize)
+        else
+            density(R.U[Var,index,t],title=title,label=label,xlabel=xlabel,ylabel=ylabel,color=color,size=figsize)
+            vline!([trueval],color=:red,label="true value")
+        end
+    else
+        if trueval == nothing
+            density!(R.U[Var,index,t],title=title,label=label,xlabel=xlabel,ylabel=ylabel,color=color,size=figsize)
+        else
+            density!(R.U[Var,index,t],title=title,label=label,xlabel=xlabel,ylabel=ylabel,color=color)
+            vline!([trueval],color=:red,label="true value")
+        end
+    end
+end
 
 end
