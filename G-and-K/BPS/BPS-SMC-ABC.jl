@@ -28,26 +28,26 @@ function φ1(x0::Vector{Float64},u0::Vector{Float64},δ::Float64)
     return (x0 .+ δ*u0, -u0)
 end
 
-function EnergyBounce(x0,u0;gradFunc)
+function EnergyBounce(x0,u0;gradFunc,Σ)
     n = normalize(gradient(gradFunc,x0))
-    return u0 .- 2.0*dot(u0,n)*n
+    return u0 .- 2.0*dot(u0,n)*Σ*n/(transpose(n)*Σ*n)
 end
 
-function BoundaryBounce(x0,u0;gradFunc)
+function BoundaryBounce(x0,u0;gradFunc,Σ)
     if any([(x0[1:4].<0);(x0[1:4].>10)])
         n = normalize(1.0*(x0 .< 0) .- 1.0*(x0 .> 10))
     else
         n = normalize(gradient(gradFunc,x0))
     end
-    return u0 .- 2.0*dot(u0,n)*n
+    return u0 .- 2.0*dot(u0,n)*Σ*n/(transpose(n)*Σ*n)
 end
 
 σ(x0,u0) = (x0,-u0)
 
-function φ2(x0,u0,δ;BounceType,gradFunc)
+function φ2(x0,u0,δ;BounceType,gradFunc,Σ)
     x1, u1 = φ1(x0,u0,δ)
     xflip,uflip = σ(x1,u1)
-    xbounce = xflip; ubounce = BounceType(xflip,uflip,gradFunc=gradFunc)
+    xbounce = xflip; ubounce = BounceType(xflip,uflip,gradFunc=gradFunc,Σ=Σ)
     x2,u2 = φ1(xbounce,ubounce,δ)
     return x2,u2
 end
@@ -59,7 +59,7 @@ function α1(x0,u0,δ;y,ϵ,Σ)
 end
 
 function α2(x0,u0,δ;y,ϵ,Σ,BounceType,gradFunc)
-    x2,u2 = φ2(x0,u0,δ,BounceType=BounceType,gradFunc=gradFunc)
+    x2,u2 = φ2(x0,u0,δ,BounceType=BounceType,gradFunc=gradFunc,Σ=Σ)
     forward_1st_proposal_acc = exp(α1(x0,u0,δ,y=y,ϵ=ϵ,Σ=Σ))
     backward_1st_proposal_acc = exp(α1(x2,u2,δ,y=y,ϵ=ϵ,Σ=Σ))
     return min(0,log(1-backward_1st_proposal_acc)-log(1-forward_1st_proposal_acc)+logpi(x2,u2,y=y,ϵ=ϵ,Σ=Σ)-logpi(x0,u0,y=y,ϵ=ϵ,Σ=Σ))
@@ -92,7 +92,7 @@ function BPS_LocalMH(N,x0,δ,κ;y,ϵ,Σ)
         x1,u1 = φ1(X[n-1,:],u0,δ)
         if (any([(x1[1:4].>10);(x1[1:4] .< 0)])) || (Dist(x1,y=y) >= ϵ)
             BoundaryBounceTime += 1
-            x2,u2 = φ2(X[n-1,:],u0,δ,BounceType=BoundaryBounce,gradFunc=boundfunc)
+            x2,u2 = φ2(X[n-1,:],u0,δ,BounceType=BoundaryBounce,gradFunc=boundfunc,Σ=Σ)
             alpha2 = α2(X[n-1,:],u0,δ;y=y,ϵ=ϵ,Σ=Σ,BounceType=BoundaryBounce,gradFunc=boundfunc)
             if log(rand(Uniform(0,1))) < alpha2
                 BoundaryBounceSuccess += 1
@@ -112,7 +112,7 @@ function BPS_LocalMH(N,x0,δ,κ;y,ϵ,Σ)
                 uhat = u1
             else
                 EnergyBounceTime += 1
-                x2,u2 = φ2(X[n-1,:],u0,δ,BounceType=EnergyBounce,gradFunc=U)
+                x2,u2 = φ2(X[n-1,:],u0,δ,BounceType=EnergyBounce,gradFunc=U,Σ=Σ)
                 alpha2 = α2(X[n-1,:],u0,δ;y=y,ϵ=ϵ,Σ=Σ,BounceType=EnergyBounce,gradFunc=U)
                 if log(rand(Uniform(0,1))) < alpha2
                     EnergyBounceSuccess += 1

@@ -2,6 +2,7 @@ module RandomWalk
 
 using LinearAlgebra, Distributions
 using Plots, StatsPlots
+theme(:ggplot2)
 f(z;θ) = θ[1] + θ[2]*(1+0.8*(1-exp(-θ[3]*z))/(1+exp(-θ[3]*z)))*(1+z^2)^θ[4]*z;
 
 #=
@@ -107,7 +108,7 @@ end
 
 function Epsilon(R;title="",label="",xlabel="Iteration",ylabel="log-Epsilon",color=:springgreen,new=true,figsize=(600,600))
     if new
-        plot(log.(R.EPSILON),label=label,title=title,color=color,size=figsize)
+        plot(log.(R.EPSILON),label=label,xlabel=xlabel,ylabel=ylabel,title=title,color=color,size=figsize)
     else
         plot!(log.(R.EPSILON),label=label,title=title,color=color)
     end
