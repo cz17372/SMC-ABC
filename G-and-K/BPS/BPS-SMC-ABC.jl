@@ -138,12 +138,12 @@ Perform the second type of Discrete Bouncy Particle Sampler Algorithm. Boundary 
 """
 function BPS2(N::Int64,x0::Vector{Float64},δ::Float64,κ::Float64;y::Vector{Float64},ϵ::Float64,Σ::Matrix{Float64})
     boundfunction(x) = C(x,y=y,ϵ=ϵ) # Equation of the boundary for given "y" and "ϵ"
-    X = zeros(N,length(x0))
+    X = zeros(N+1,length(x0))
     X[1,:] = x0
     # Random generate a starting velocity
     u0 = rand(MultivariateNormal(zeros(length(x0)),Σ))
     AcceptedNumber = 0; BoundaryBounceProposed = 0; BoundaryBounceAccepted = 0;
-    for n = 2:N
+    for n = 2:(N+1)
         # generate the first proposal according to ϕ1
         x1,u1 = φ1(X[n-1,:],u0,δ)
         # Check if x1 steps outside the boundary
@@ -247,12 +247,12 @@ function SMC(N::Int64,T::Int64,y::Vector{Float64};Threshold::Float64,δ::Float64
             U[:,index[i],t+1], BoundaryBounceTimeVec[index[i]], BoundaryBounceSuccessVec[index[i]], ParticleAccepted[index[i]] = MH(K[t],U[:,ANCESTOR[index[i],t],t],δ,κ,y=y,ϵ=EPSILON[t+1],Σ = 1.0/d^2*Σ)
             DISTANCE[index[i],t+1] = Dist(U[:,index[i],t+1],y=y)
         end
-        MH_AcceptProb[t] = mean(ParticleAccepted[index])/K[t]
+        MH_AcceptProb[t] = mean(ParticleAccepted[index])/(K[t])
         println("Average Acceptance Probability is ", MH_AcceptProb[t])
-        BoundaryBounceProposed[t] = sum(BoundaryBounceTimeVec)
-        println("Proportion of internal proposal is ",1 - BoundaryBounceProposed[t]/(N*(K[t]-1)))
+        BoundaryBounceProposed[t] = sum(BoundaryBounceTimeVec[index])
+        println("Proportion of internal proposal is ",1 - BoundaryBounceProposed[t]/(length(index)*K[t]))
         print("\n\n")
-        BoundaryBounceAccepted[t] = sum(BoundaryBounceSuccessVec)
+        BoundaryBounceAccepted[t] = sum(BoundaryBounceSuccessVec[index])
         K[t+1] = Int(ceil(log(0.01)/log(1-MH_AcceptProb[t])))
     end
     return (U=U,DISTANCE=DISTANCE,WEIGHT=WEIGHT,EPSILON=EPSILON,ANCESTOR=ANCESTOR,AcceptanceProb=MH_AcceptProb,K=K,BoundaryBounceAccepted=BoundaryBounceAccepted,BoundaryBounceProposed=BoundaryBounceProposed)
