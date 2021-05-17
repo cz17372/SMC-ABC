@@ -10,6 +10,7 @@ C(x;y,ϵ)  = Dist(x,y=y) - ϵ
 
 logPrior(x) = sum(logpdf.(Uniform(0,10),x[1:4])) + sum(logpdf.(Normal(0,1),x[5:end]))
 # define the log-pdf of the prior, constrained by C(ξ;y,ϵ)
+
 function logpi(x::Vector{Float64},u::Vector{Float64};y::Vector{Float64},ϵ::Float64,Σ)
     if C(x,y=y,ϵ=ϵ) > 0
         return -Inf
@@ -23,7 +24,6 @@ U(x) = -logPrior(x)
 
 
 #---------------------------- Proposal Mechanism ------------------------------#
-export φ1, EnergyBounce, BoundaryBounce, σ, φ2
 function φ1(x0::Vector{Float64},u0::Vector{Float64},δ::Float64)
     return (x0 .+ δ*u0, -u0)
 end
@@ -76,50 +76,40 @@ function DirectionRefresh(u0,κ,Σ)
 end
 
 #--------------------------- BPS Sampler ------------------------------------------#
-function BPS_LocalMH(N,x0,δ,κ;y,ϵ,Σ)
+function BPS1(N::Int64,x0::Vector{Float64},δ::Float64,κ::Float64;y::Vector{Float64},ϵ::Float64,Σ::Matrix{Float64})
+    boundfunc(x) = C(x,y=y,ϵ=ϵ)
     X = zeros(N,length(x0))
     X[1,:] = x0
     u0 = rand(MultivariateNormal(zeros(length(x0)),Σ))
-    AcceptedNum = 0
-    boundfunc(x) = C(x,y=y,ϵ=ϵ)
-    EnergyBounceTime      = 0
-    EnergyBounceSuccess   = 0
-    BoundaryBounceTime    = 0
-    BoundaryBounceSuccess = 0
-    StillOutsideNum       = 0 
+    AcceptedNumber = 0; BoundaryBounceProposed = 0; BoundaryBounceAccepted = 0;
     for n = 2:N
         x1,u1 = φ1(X[n-1,:],u0,δ)
         if (any([(x1[1:4].>10);(x1[1:4] .< 0)])) || (Dist(x1,y=y) >= ϵ)
-            BoundaryBounceTime += 1
+            BoundaryBounceProposed += 1
             x2,u2 = φ2(X[n-1,:],u0,δ,BounceType=BoundaryBounce,gradFunc=boundfunc,Σ=Σ)
             alpha2 = α2(X[n-1,:],u0,δ;y=y,ϵ=ϵ,Σ=Σ,BounceType=BoundaryBounce,gradFunc=boundfunc)
             if log(rand(Uniform(0,1))) < alpha2
-                BoundaryBounceSuccess += 1
+                BoundaryBounceAccepted += 1
                 AcceptedNum += 1
                 xhat=x2
                 uhat=u2
             else
-                if (any([(x2[1:4].>10);(x2[1:4] .< 0)])) || (Dist(x2,y=y) >= ϵ)
-                    StillOutsideNum += 1
-                end
                 xhat=X[n-1,:]
                 uhat=u0
             end
         else
             alpha1 = α1(X[n-1,:],u0,δ;y=y,ϵ=ϵ,Σ=Σ)
             if log(rand(Uniform(0,1))) < alpha1
-                AcceptedNum += 1
+                AcceptedNumber += 1
                 xhat = x1
                 uhat = u1
             else
-                EnergyBounceTime += 1
                 x2,u2 = φ2(X[n-1,:],u0,δ,BounceType=EnergyBounce,gradFunc=U,Σ=Σ)
                 alpha2 = α2(X[n-1,:],u0,δ;y=y,ϵ=ϵ,Σ=Σ,BounceType=EnergyBounce,gradFunc=U)
                 if log(rand(Uniform(0,1))) < alpha2
-                    EnergyBounceSuccess += 1
+                    AcceptedNumber += 1
                     xhat = x2
                     uhat = u2
-                    AcceptedNum += 1
                 else
                     xhat = X[n-1,:]
                     uhat = u0
@@ -132,11 +122,94 @@ function BPS_LocalMH(N,x0,δ,κ;y,ϵ,Σ)
         X[n,:] = xhat
         u0 = DirectionRefresh(uhat,κ,Σ)
     end
-    return X[end,:],AcceptedNum, EnergyBounceTime,EnergyBounceSuccess,BoundaryBounceTime,BoundaryBounceSuccess, StillOutsideNum
+    return X[end,:],BoundaryBounceProposed,BoundaryBounceAccepted,AcceptedNumber
 end
 
+"""
+    BPS2(N,x0,δ,κ,y,ϵ,Σ)
+
+Perform the second type of Discrete Bouncy Particle Sampler Algorithm. Boundary bounce takes place at the original position when the first proposal steps outside the boundary
+
+# Arguments
+- `N::Integer`: The number of iterations the discrete BPS algorithm performs
+- `x0::Vector`: Starting position of the discrete BPS algorithm
+- `δ::Float`  : Step size of the discrete BPS algorithm
+- `κ::Float`  : Velocity refreshment rate for the velocity component
+"""
+function BPS2(N::Int64,x0::Vector{Float64},δ::Float64,κ::Float64;y::Vector{Float64},ϵ::Float64,Σ::Matrix{Float64})
+    boundfunction(x) = C(x,y=y,ϵ=ϵ) # Equation of the boundary for given "y" and "ϵ"
+    X = zeros(N,length(x0))
+    X[1,:] = x0
+    # Random generate a starting velocity
+    u0 = rand(MultivariateNormal(zeros(length(x0)),Σ))
+    AcceptedNumber = 0; BoundaryBounceProposed = 0; BoundaryBounceAccepted = 0;
+    for n = 2:N
+        # generate the first proposal according to ϕ1
+        x1,u1 = φ1(X[n-1,:],u0,δ)
+        # Check if x1 steps outside the boundary
+        if any([(x1[1:4].>10) ; (x1[1:4] .< 0)]) || (boundfunction(x1)>0)
+            # The boundary bounce is performed
+            BoundaryBounceProposed += 1
+            x2,u2 = X[n-1,:], -BoundaryBounce(X[n-1,:],u0,gradFunc = boundfunction,Σ = Σ)
+            # The acceptance probability for this move is given by (1-α1∘ ϕ2(x0,u0))/(1-α1(x0,u0))
+            alpha = log(1-exp(α1(x2,u2,δ,y=y,ϵ=ϵ,Σ=Σ)))-log(1-exp(α1(X[n-1,:],u0,δ,y=y,ϵ=ϵ,Σ=Σ)))
+            if log(rand(Uniform(0,1))) < alpha
+                BoundaryBounceAccepted += 1
+                xhat = x2
+                uhat = u2
+            else
+                xhat = X[n-1,:]
+                uhat = u0
+            end
+        else
+            # The first proposal is not outside the boundary
+            alpha1 = α1(X[n-1,:],u0,δ,y=y,ϵ=ϵ,Σ=Σ)
+            if log(rand(Uniform(0,1))) < alpha1
+                # The first proposal is accepted 
+                AcceptedNumber += 1
+                xhat = x1
+                uhat = u1
+            else
+                # Upon rejection of the first proposal, propose a second move by bounce operation
+                x2,u2 = φ2(X[n-1,:],u0,δ,BounceType=EnergyBounce,gradFunc=U,Σ=Σ)
+                alpha2 = α2(X[n-1,:],u0,δ,y=y,ϵ=ϵ,Σ=Σ,BounceType=EnergyBounce,gradFunc=U)
+                if log(rand(Uniform(0,1))) < alpha2
+                    # The second proposla is accepted
+                    AcceptedNumber += 1
+                    xhat = x2
+                    uhat = u2
+                else
+                    xhat = X[n-1,:]
+                    uhat = u0
+                end
+            end
+        end
+        # Flip the velocity
+        xhat,uhat = σ(xhat,uhat)
+        X[n,:] = xhat
+        # Refresh the velocity
+        u0 = DirectionRefresh(xhat,κ,Σ)
+    end
+    return X[end,:],BoundaryBounceProposed,BoundaryBounceAccepted,AcceptedNumber
+end
+
+
 #-------------------------- BPS_SMC_ABC -------------------------------------------#
-function BPS_SMC_ABC(N,T,y;Threshold,δ,κ,K0)
+"""
+    SMC(N,T,y;Threshold,δ,κ,K0,MH)
+Perform SMC-ABC algorithm with Discrete Bouncy Particle Sampler algorithm for local exploration
+
+# Arguments
+- `N::Int` : The number of particles use for each SMC step
+- `T::Int` : The number of SMC steps performed 
+- `y::Vector`: The observations we have in hand
+-  `Threshold::Float` : A float number between 0 and 1 representing the threshold used for determining the next value of ϵ. Upon resampling from the particles of the previous iterations, then the next ϵ is chosen such that `Threshold` × `Total number of unique particles after resampling` of the unique particles will be kept alive
+- `δ::Float` : The stepsize for the discrete BPS algorithm
+- `κ::Float` : The velocity refreshment rate for the discrete BPS algorithm
+- `K0::Float`: The initial number of iterations for each discrete BPS chain
+- `MH`       : The BPS sampler used within the SMC algorithm. Current choice includes `BPS1` and `BPS2`
+"""
+function SMC(N::Int64,T::Int64,y::Vector{Float64};Threshold::Float64,δ::Float64,κ::Float64,K0::Int64,MH)
     NoData = length(y)
     U = zeros(4+NoData,N,T+1)
     EPSILON = zeros(T+1)
@@ -151,18 +224,10 @@ function BPS_SMC_ABC(N,T,y;Threshold,δ,κ,K0)
     end
     WEIGHT[:,1] .= 1/N
     EPSILON[1] = findmax(DISTANCE[:,1])[1]
-    ParticleAcceptProb = zeros(N)
+    ParticleAccepted = zeros(N)
     MH_AcceptProb = zeros(T)
-    EnergyBounceAccepted = zeros(T)
-    EnergyBounceProposed = zeros(T)
-    BoundaryBounceAccepted = zeros(T)
-    BoundaryBounceProposed = zeros(T)
-    EnergyBounceTimeVec = zeros(N)
-    EnergyBounceSuccessVec = zeros(N)
-    BoundaryBounceTimeVec = zeros(N)
-    BoundaryBounceSuccessVec = zeros(N)
-    BoundaryBounceOutside = zeros(T)
-    BoundaryBounceOutsideVec = zeros(N)
+    BoundaryBounceTimeVec = zeros(N); BoundaryBounceSuccessVec = zeros(N)
+    BoundaryBounceAccepted = zeros(T); BoundaryBounceProposed = zeros(T); 
     for t = 1:T
         ANCESTOR[:,t] = vcat(fill.(1:N,rand(Multinomial(N,WEIGHT[:,t])))...);
         if length(unique(DISTANCE[ANCESTOR[:,t],t])) > Int(floor(0.4*N))
@@ -179,20 +244,18 @@ function BPS_SMC_ABC(N,T,y;Threshold,δ,κ,K0)
         d = mean(mapslices(norm,rand(MultivariateNormal(zeros(4+NoData),Σ),100000),dims=1))
         println("Performing local Metropolis-Hastings...")
         @time Threads.@threads for i = 1:length(index)
-            U[:,index[i],t+1],ParticleAcceptProb[index[i]],EnergyBounceTimeVec[i],EnergyBounceSuccessVec[i],BoundaryBounceTimeVec[i],BoundaryBounceSuccessVec[i],BoundaryBounceOutsideVec[i] = BPS_LocalMH(K[t],U[:,ANCESTOR[index[i],t],t],δ,κ,y=y,ϵ=EPSILON[t+1],Σ = 1.0/d^2*Σ)
+            U[:,index[i],t+1], BoundaryBounceTimeVec[index[i]], BoundaryBounceSuccessVec[index[i]], ParticleAccepted[index[i]] = MH(K[t],U[:,ANCESTOR[index[i],t],t],δ,κ,y=y,ϵ=EPSILON[t+1],Σ = 1.0/d^2*Σ)
             DISTANCE[index[i],t+1] = Dist(U[:,index[i],t+1],y=y)
         end
-        MH_AcceptProb[t] = mean(ParticleAcceptProb[index])/K[t]
-        EnergyBounceAccepted[t] = sum(EnergyBounceSuccessVec)
-        EnergyBounceProposed[t] = sum(EnergyBounceTimeVec)
-        BoundaryBounceAccepted[t] = sum(BoundaryBounceSuccessVec)
-        BoundaryBounceProposed[t] = sum(BoundaryBounceTimeVec)
-        BoundaryBounceOutside[t] = sum(BoundaryBounceOutsideVec)
-        K[t+1] = Int64(ceil(log(0.01)/log(1-MH_AcceptProb[t])))
+        MH_AcceptProb[t] = mean(ParticleAccepted[index])/K[t]
         println("Average Acceptance Probability is ", MH_AcceptProb[t])
+        BoundaryBounceProposed[t] = sum(BoundaryBounceTimeVec)
+        println("Proportion of internal proposal is ",1 - BoundaryBounceProposed[t]/(N*(K[t]-1)))
         print("\n\n")
+        BoundaryBounceAccepted[t] = sum(BoundaryBounceSuccessVec)
+        K[t+1] = Int(ceil(log(0.01)/log(1-MH_AcceptProb[t])))
     end
-    return (U=U,DISTANCE=DISTANCE,WEIGHT=WEIGHT,EPSILON=EPSILON,ANCESTOR=ANCESTOR,AcceptanceProb=MH_AcceptProb,K=K,EnergyBounceAccepted =EnergyBounceAccepted,EnergyBounceProposed=EnergyBounceProposed,BoundaryBounceAccepted=BoundaryBounceAccepted,BoundaryBounceProposed=BoundaryBounceProposed,BoundaryBounceOutsie=BoundaryBounceOutside)
+    return (U=U,DISTANCE=DISTANCE,WEIGHT=WEIGHT,EPSILON=EPSILON,ANCESTOR=ANCESTOR,AcceptanceProb=MH_AcceptProb,K=K,BoundaryBounceAccepted=BoundaryBounceAccepted,BoundaryBounceProposed=BoundaryBounceProposed)
 end
 end
 

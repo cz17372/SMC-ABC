@@ -35,4 +35,9 @@ plot(R.EnergyBounceProposed,label="proposed",title="Energy Reflection");plot!(R.
 plot(R.BoundaryBounceProposed,label="proposed",title="Boundary Reflection");plot!(R.BoundaryBounceAccepted,label="accepted",size=(600,400))
 
 plot(R.BoundaryBounceAccepted./R.BoundaryBounceProposed)
-using Plots
+using Plots,StatsPlots
+
+R = BPS.SMC(1000,130,dat20,Threshold=0.8,δ=0.5,κ=0.7,K0=10,MH=BPS.BPS2)
+index = findall(R.DISTANCE[:,end] .> 0)
+density(R.U[1,index,end])
+plot(log.(R.EPSILON))
