@@ -20,5 +20,5 @@ density(R_MCMC[15001:end,3],linewidth=2.0,color=:darkgreen,label="")
 include("Langevin/Langevin-SMC-ABC.jl")
 include("BPS/BPS-SMC-ABC.jl")
 include("RandomWalk/RW-SMC-ABC.jl")
-include("MCMC/MCMC.jl")
+#include("MCMC/MCMC.jl")
 #@load "MCMC/MCMC_COV.jld2"
