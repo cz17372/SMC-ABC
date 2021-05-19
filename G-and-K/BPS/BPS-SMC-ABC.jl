@@ -261,7 +261,7 @@ function SMC(N::Int64,T::Int64,y::Vector{Float64};Threshold::Float64,δ::Float64
         println("Proportion of internal proposal is ",1 - BoundaryBounceProposed[t]/(length(index)*K[t]))
         BoundaryBounceAccepted[t] = sum(BoundaryBounceSuccessVec[index])
         K[t+1] = Int(ceil(log(0.01)/log(1-MH_AcceptProb[t])))
-        if MH_AcceptProb[t] < 0.3 && δ > 0.05
+        if MH_AcceptProb[t] < 0.3 && δ > 0.1
             δ = exp(log(δ) + 0.5*(MH_AcceptProb[t] - 0.3))
         end
         println("The step size used in the next SMC iteration is",δ)
