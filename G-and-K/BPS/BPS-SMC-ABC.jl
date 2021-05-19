@@ -86,11 +86,19 @@ function BPS1(N::Int64,x0::Vector{Float64},δ::Float64,κ::Float64;y::Vector{Flo
         x1,u1 = φ1(X[n-1,:],u0,δ)
         if (any([(x1[1:4].>10);(x1[1:4] .< 0)])) || (Dist(x1,y=y) >= ϵ)
             BoundaryBounceProposed += 1
+            iter = 1
             x2,u2 = φ2(X[n-1,:],u0,δ,BounceType=BoundaryBounce,gradFunc=boundfunc,Σ=Σ)
-            alpha2 = α2(X[n-1,:],u0,δ;y=y,ϵ=ϵ,Σ=Σ,BounceType=BoundaryBounce,gradFunc=boundfunc)
+
+            while (any([(x2[1:4].>10);(x2[1:4] .< 0)])) || (Dist(x2,y=y) >= ϵ)
+                iter += 1
+                x2,u2 = φ2(x2 .+ δ*u2,-u2,δ,BounceType=BoundaryBounce,gradFunc=boundfunc,Σ=Σ)
+                if iter > 1000
+                    break
+                end
+            end
+            alpha2 = logpi(x2,u2,y=y,ϵ=ϵ,Σ=Σ) - logpi(X[n-1,:],u0,y=y,ϵ=ϵ,Σ=Σ)
             if log(rand(Uniform(0,1))) < alpha2
                 BoundaryBounceAccepted += 1
-                AcceptedNum += 1
                 xhat=x2
                 uhat=u2
             else
@@ -122,7 +130,7 @@ function BPS1(N::Int64,x0::Vector{Float64},δ::Float64,κ::Float64;y::Vector{Flo
         X[n,:] = xhat
         u0 = DirectionRefresh(uhat,κ,Σ)
     end
-    return X[end,:],BoundaryBounceProposed,BoundaryBounceAccepted,AcceptedNumber
+    return X,BoundaryBounceProposed,BoundaryBounceAccepted,AcceptedNumber
 end
 
 """
@@ -251,9 +259,13 @@ function SMC(N::Int64,T::Int64,y::Vector{Float64};Threshold::Float64,δ::Float64
         println("Average Acceptance Probability is ", MH_AcceptProb[t])
         BoundaryBounceProposed[t] = sum(BoundaryBounceTimeVec[index])
         println("Proportion of internal proposal is ",1 - BoundaryBounceProposed[t]/(length(index)*K[t]))
-        print("\n\n")
         BoundaryBounceAccepted[t] = sum(BoundaryBounceSuccessVec[index])
         K[t+1] = Int(ceil(log(0.01)/log(1-MH_AcceptProb[t])))
+        if MH_AcceptProb[t] < 0.3 && δ > 0.05
+            δ = exp(log(δ) + 0.5*(MH_AcceptProb[t] - 0.3))
+        end
+        println("The step size used in the next SMC iteration is",δ)
+        print("\n\n")
     end
     return (U=U,DISTANCE=DISTANCE,WEIGHT=WEIGHT,EPSILON=EPSILON,ANCESTOR=ANCESTOR,AcceptanceProb=MH_AcceptProb,K=K,BoundaryBounceAccepted=BoundaryBounceAccepted,BoundaryBounceProposed=BoundaryBounceProposed)
 end

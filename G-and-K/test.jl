@@ -1,6 +1,6 @@
 include("main.jl")
 using Plots,StatsPlots, JLD2, LinearAlgebra
-R = BPS.SMC(1000,100,dat20,Threshold=0.8,δ=0.5,κ=0.7,K0=10,MH=BPS.BPS2)
+R = BPS.SMC(1000,200,dat20,Threshold=0.8,δ=0.5,κ=0.7,K0=10,MH=BPS.BPS2)
 index = findall(R.DISTANCE[:,end] .> 0)
 density(R.U[1,index,end])
 plot(log.(R.EPSILON))
@@ -29,4 +29,20 @@ anim = @animate for i = 1:301
     density!(MCMC[50001:end,2],label="")
 end
 
-gif(anim,fps=4)
+
+samp() = [rand(Uniform(0,10),4);rand(Normal(0,1),20)]
+TrueX = zeros(10000,24)
+n = 0
+while n < 10000
+    x = samp()
+    if norm(f.(x[5:end],θ=x[1:4]) .- dat20) < 8.0
+        n += 1
+        println(n)
+        TrueX[n,:] = x
+    end
+end
+
+Σ = cov(TrueX)
+d = mean(mapslices(norm,rand(MultivariateNormal(zeros(24),Σ),10000),dims=1))
+
+R = BPS.BPS1(50000,TrueX[1,:],0.5,0.5,y=dat20,ϵ=8.0,Σ=1/d^2*Σ)
