@@ -26,14 +26,14 @@ density(MCMC[50001:end,1])
 density!(R2.U[1,index,end])
 
 anim = @animate for i = 1:301
-    index = findall(R.WEIGHT[:,i] .> 0)
-    p1 = density(R.U[1,index,i],label="")
+    index = findall(R2.WEIGHT[:,i] .> 0)
+    p1 = density(R2.U[1,index,i],label="")
     density!(MCMC[50001:end,1],label="")
-    p2 = density(R.U[2,index,i],label="")
+    p2 = density(R2.U[2,index,i],label="")
     density!(MCMC[50001:end,2],label="")
-    p3 = density(R.U[3,index,i],label="")
+    p3 = density(R2.U[3,index,i],label="")
     density!(MCMC[50001:end,3],label="")
-    p4 = density(R.U[4,index,i],label="")
+    p4 = density(R2.U[4,index,i],label="")
     density!(MCMC[50001:end,4],label="")
     plot(p1,p2,p3,p4,layout=(2,2),title="Iteration $(i)",size=(600,600))
 end
@@ -52,14 +52,34 @@ while n < 10000
 end
 index = findall(R.WEIGHT[:,end] .> 0)
 Σ = cov(R.U[:,index,end],dims=2)
-d = mean(mapslices(norm,rand(MultivariateNormal(zeros(24),1.0*I),10000),dims=1))
+d = mean(mapslices(norm,rand(MultivariateNormal(zeros(24),Σ),10000),dims=1))
 x = R.U[:,1,end]
 
-R3 = BPS.BPS2(50000,R.U[:,1,end],0.1,0.8,y=dat20,ϵ=0.2,Σ=1/d^2*Σ)
+R3 = BPS.BPS1(1000,R.U[:,1,end],0.01,exp(-2*0.01),y=dat20,ϵ=0.2,Σ=1/d^2*Σ)
 
-plot(R3[1][:,4])
+plot(R3[1][:,1])
 plot(log.(R2.K),label="Fixed Stepsize")
 plot!(log.(R.K))
 
 index = findall
 
+y = dat20; x0 = R.U[:,1,end]; ϵ = 0.20; Σ = 1/d^2*Σ;δ=0.1; κ = exp(-2*δ)
+N = 100
+boundfunc(x) = BPS.C(x,y=y,ϵ=ϵ)
+X = zeros(N,length(x0))
+X[1,:] = x0
+u0 = rand(MultivariateNormal(zeros(length(x0)),Σ))
+n=2
+x1,u1 = BPS.φ1(X[n-1,:],u0,δ)
+(any([(x1[1:4].>10);(x1[1:4] .< 0)])) || (BPS.Dist(x1,y=y) >= ϵ)
+x2,u2 = BPS.φ2(X[n-1,:],u0,δ,BounceType=BPS.BoundaryBounce,gradFunc=boundfunc,Σ=Σ)
+BPS.Dist(x2,y=y)
+iter = 1
+while (any([(x2[1:4].>10);(x2[1:4] .< 0)])) || (BPS.Dist(x2,y=y) >= ϵ)
+    iter += 1
+    x2,u2 = BPS.φ2(x2 .+ δ*u2,u2,δ,BounceType=BPS.BoundaryBounce,gradFunc=boundfunc,Σ=Σ)
+    if iter > 1000
+        break
+    end
+end
+BPS.Dist(x2,y=y)

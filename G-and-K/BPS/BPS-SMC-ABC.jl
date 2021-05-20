@@ -39,6 +39,7 @@ function BoundaryBounce(x0,u0;gradFunc,Σ)
     else
         n = normalize(gradient(gradFunc,x0))
     end
+    n = inv(Σ)*n
     return u0 .- 2.0*dot(u0,n)*Σ*n/(transpose(n)*Σ*n)
 end
 
@@ -66,9 +67,10 @@ function α2(x0,u0,δ;y,ϵ,Σ,BounceType,gradFunc)
 end
 
 #--------------------------- Veclocity Update ------------------------------------#
-function DirectionRefresh(u0,κ,Σ)
+function DirectionRefresh(u0,δ,κ,Σ)
+    p = exp(-κ*δ)
     ind = rand(Bernoulli(κ))
-    if ind == 0
+    if ind == 1
         return u0
     else
         return rand(MultivariateNormal(zeros(length(u0)),Σ))
@@ -83,12 +85,12 @@ function BPS1(N::Int64,x0::Vector{Float64},δ::Float64,κ::Float64;y::Vector{Flo
     u0 = rand(MultivariateNormal(zeros(length(x0)),Σ))
     AcceptedNumber = 0; BoundaryBounceProposed = 0; BoundaryBounceAccepted = 0;
     for n = 2:N
+        println(n)
         x1,u1 = φ1(X[n-1,:],u0,δ)
         if (any([(x1[1:4].>10);(x1[1:4] .< 0)])) || (Dist(x1,y=y) >= ϵ)
             BoundaryBounceProposed += 1
             iter = 1
             x2,u2 = φ2(X[n-1,:],u0,δ,BounceType=BoundaryBounce,gradFunc=boundfunc,Σ=Σ)
-
             while (any([(x2[1:4].>10);(x2[1:4] .< 0)])) || (Dist(x2,y=y) >= ϵ)
                 iter += 1
                 x2,u2 = φ2(x2 .+ δ*u2,-u2,δ,BounceType=BoundaryBounce,gradFunc=boundfunc,Σ=Σ)
@@ -196,9 +198,9 @@ function BPS2(N::Int64,x0::Vector{Float64},δ::Float64,κ::Float64;y::Vector{Flo
         xhat,uhat = σ(xhat,uhat)
         X[n,:] = xhat
         # Refresh the velocity
-        u0 = DirectionRefresh(xhat,κ,Σ)
+        u0 = DirectionRefresh(xhat,δ,κ,Σ)
     end
-    return X[end,:],BoundaryBounceProposed,BoundaryBounceAccepted,AcceptedNumber
+    return X,BoundaryBounceProposed,BoundaryBounceAccepted,AcceptedNumber
 end
 
 
