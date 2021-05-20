@@ -7,7 +7,9 @@ plot(log.(R.EPSILON))
 
 
 @load "C:/Users/chang/OneDrive/Documents/BPS2_Thres080_Stepsize045_Refresh060.jld2"
+@load "C:/Users/chang/OneDrive/Documents/BPS2_Thres080_Stepsize050_Refresh060_Adaptive.jld2"
 R = BPS2_Thres080_Stepsize045_Refresh060
+R2 = BPS2_Thres080_Stepsize050_Refresh060_Adaptive
 
 ESS(x) = length(findall(x .> 0))
 
@@ -21,15 +23,22 @@ MCMC,α = RWM(200000,Σ,0.2,y=dat20,θ0=rand(Uniform(0,10),4))
 
 
 density(MCMC[50001:end,1])
-density!(R.U[1,index,end])
+density!(R2.U[1,index,end])
 
 anim = @animate for i = 1:301
     index = findall(R.WEIGHT[:,i] .> 0)
-    density(R.U[2,index,i],label="")
+    p1 = density(R.U[1,index,i],label="")
+    density!(MCMC[50001:end,1],label="")
+    p2 = density(R.U[2,index,i],label="")
     density!(MCMC[50001:end,2],label="")
+    p3 = density(R.U[3,index,i],label="")
+    density!(MCMC[50001:end,3],label="")
+    p4 = density(R.U[4,index,i],label="")
+    density!(MCMC[50001:end,4],label="")
+    plot(p1,p2,p3,p4,layout=(2,2),title="Iteration $(i)",size=(600,600))
 end
 
-
+gif(anim,fps=4)
 samp() = [rand(Uniform(0,10),4);rand(Normal(0,1),20)]
 TrueX = zeros(10000,24)
 n = 0
@@ -41,8 +50,16 @@ while n < 10000
         TrueX[n,:] = x
     end
 end
+index = findall(R.WEIGHT[:,end] .> 0)
+Σ = cov(R.U[:,index,end],dims=2)
+d = mean(mapslices(norm,rand(MultivariateNormal(zeros(24),1.0*I),10000),dims=1))
+x = R.U[:,1,end]
 
-Σ = cov(TrueX)
-d = mean(mapslices(norm,rand(MultivariateNormal(zeros(24),Σ),10000),dims=1))
+R3 = BPS.BPS2(50000,R.U[:,1,end],0.1,0.8,y=dat20,ϵ=0.2,Σ=1/d^2*Σ)
 
-R = BPS.BPS1(50000,TrueX[1,:],0.5,0.5,y=dat20,ϵ=8.0,Σ=1/d^2*Σ)
+plot(R3[1][:,4])
+plot(log.(R2.K),label="Fixed Stepsize")
+plot!(log.(R.K))
+
+index = findall
+
