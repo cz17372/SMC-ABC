@@ -69,7 +69,7 @@ end
 #--------------------------- Veclocity Update ------------------------------------#
 function DirectionRefresh(u0,δ,κ,Σ)
     p = exp(-κ*δ)
-    ind = rand(Bernoulli(κ))
+    ind = rand(Bernoulli(p))
     if ind == 1
         return u0
     else
