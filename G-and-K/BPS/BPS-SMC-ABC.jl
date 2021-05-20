@@ -200,7 +200,7 @@ function BPS2(N::Int64,x0::Vector{Float64},δ::Float64,κ::Float64;y::Vector{Flo
         # Refresh the velocity
         u0 = DirectionRefresh(xhat,δ,κ,Σ)
     end
-    return X,BoundaryBounceProposed,BoundaryBounceAccepted,AcceptedNumber
+    return X[end,:],BoundaryBounceProposed,BoundaryBounceAccepted,AcceptedNumber
 end
 
 
