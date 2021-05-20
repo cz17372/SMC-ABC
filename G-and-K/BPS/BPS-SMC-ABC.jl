@@ -144,7 +144,7 @@ Perform the second type of Discrete Bouncy Particle Sampler Algorithm. Boundary 
 - `δ::Float`  : Step size of the discrete BPS algorithm
 - `κ::Float`  : Velocity refreshment rate for the velocity component
 """
-function BPS2(N::Int64,x0::Vector{Float64},δ::Float64,κ::Float64;y::Vector{Float64},ϵ::Float64,Σ::Matrix{Float64})
+function BPS2(N::Int64,x0::Vector{Float64},δ::Float64,κ::Float64;y::Vector{Float64},ϵ::Float64,Σ)
     boundfunction(x) = C(x,y=y,ϵ=ϵ) # Equation of the boundary for given "y" and "ϵ"
     X = zeros(N+1,length(x0))
     X[1,:] = x0
@@ -262,7 +262,7 @@ function SMC(N::Int64,T::Int64,y::Vector{Float64};Threshold::Float64,δ::Float64
         BoundaryBounceAccepted[t] = sum(BoundaryBounceSuccessVec[index])
         K[t+1] = Int(ceil(log(0.01)/log(1-MH_AcceptProb[t])))
         if MH_AcceptProb[t] < 0.3 && δ > 0.1
-            δ = exp(log(δ) + 0.5*(MH_AcceptProb[t] - 0.3))
+            δ = exp(log(δ) + 0.3*(MH_AcceptProb[t] - 0.3))
         end
         println("The step size used in the next SMC iteration is",δ)
         print("\n\n")
