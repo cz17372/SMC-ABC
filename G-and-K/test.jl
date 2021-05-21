@@ -1,11 +1,5 @@
-include("main.jl")
 using Plots,StatsPlots, JLD2, LinearAlgebra
-R = BPS.SMC(1000,200,dat20,Threshold=0.8,δ=0.5,κ=0.7,K0=10,MH=BPS.BPS2)
-index = findall(R.DISTANCE[:,end] .> 0)
-density(R.U[1,index,end])
-plot(log.(R.EPSILON))
-
-
+include("main.jl")
 @load "C:/Users/chang/OneDrive/Documents/BPS2_Thres080_Stepsize045_Refresh060.jld2"
 @load "C:/Users/chang/OneDrive/Documents/BPS2_Thres080_Stepsize050_Refresh060_Adaptive.jld2"
 R = BPS2_Thres080_Stepsize045_Refresh060
@@ -55,31 +49,11 @@ index = findall(R.WEIGHT[:,end] .> 0)
 d = mean(mapslices(norm,rand(MultivariateNormal(zeros(24),Σ),10000),dims=1))
 x = R.U[:,1,end]
 
-R3 = BPS.BPS1(1000,R.U[:,1,end],0.01,exp(-2*0.01),y=dat20,ϵ=0.2,Σ=1/d^2*Σ)
+R3 = BPS.BPS1(20000,R.U[:,1,end],0.03,exp(-2*0.03),y=dat20,ϵ=0.2)
 
-plot(R3[1][:,1])
-plot(log.(R2.K),label="Fixed Stepsize")
-plot!(log.(R.K))
+R4 = BPS.SMC(1000,100,dat20,Threshold=0.8,δ=0.5,κ=2.0,K0=10,MH=BPS.BPS1)
 
-index = findall
+index = findall(R4.WEIGHT[:,end] .> 0)
+density(R4.U[4,index,end])
 
-y = dat20; x0 = R.U[:,1,end]; ϵ = 0.20; Σ = 1/d^2*Σ;δ=0.1; κ = exp(-2*δ)
-N = 100
-boundfunc(x) = BPS.C(x,y=y,ϵ=ϵ)
-X = zeros(N,length(x0))
-X[1,:] = x0
-u0 = rand(MultivariateNormal(zeros(length(x0)),Σ))
-n=2
-x1,u1 = BPS.φ1(X[n-1,:],u0,δ)
-(any([(x1[1:4].>10);(x1[1:4] .< 0)])) || (BPS.Dist(x1,y=y) >= ϵ)
-x2,u2 = BPS.φ2(X[n-1,:],u0,δ,BounceType=BPS.BoundaryBounce,gradFunc=boundfunc,Σ=Σ)
-BPS.Dist(x2,y=y)
-iter = 1
-while (any([(x2[1:4].>10);(x2[1:4] .< 0)])) || (BPS.Dist(x2,y=y) >= ϵ)
-    iter += 1
-    x2,u2 = BPS.φ2(x2 .+ δ*u2,u2,δ,BounceType=BPS.BoundaryBounce,gradFunc=boundfunc,Σ=Σ)
-    if iter > 1000
-        break
-    end
-end
-BPS.Dist(x2,y=y)
+
