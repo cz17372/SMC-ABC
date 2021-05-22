@@ -93,7 +93,7 @@ function BPS1(N::Int64,x0::Vector{Float64},δ::Float64,κ::Float64;y::Vector{Flo
             while (any([(x2[1:4].>10);(x2[1:4] .< 0)])) || (Dist(x2,y=y) >= ϵ)
                 iter += 1
                 x2,u2 = φ2(x2 .+ δ*u2,-u2,δ,BounceType=BoundaryBounce,gradFunc=boundfunc)
-                if iter > 1000
+                if iter > 100
                     break
                 end
             end
@@ -261,8 +261,8 @@ function SMC(N::Int64,T::Int64,y::Vector{Float64};Threshold::Float64,δ::Float64
         println("Proportion of internal proposal is ",1 - BoundaryBounceProposed[t]/(length(index)*K[t]))
         BoundaryBounceAccepted[t] = sum(BoundaryBounceSuccessVec[index])
         K[t+1] = Int(ceil(log(0.01)/log(1-MH_AcceptProb[t])))
-        if MH_AcceptProb[t] < 0.6
-            δ = exp(log(δ) + 0.3*(MH_AcceptProb[t] - 0.6))
+        if MH_AcceptProb[t] < 0.5
+            δ = exp(log(δ) + 0.3*(MH_AcceptProb[t] - 0.5))
         end
         println("The step size used in the next SMC iteration is ",δ)
         print("\n\n")
