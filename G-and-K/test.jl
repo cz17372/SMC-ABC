@@ -51,7 +51,7 @@ x = R.U[:,1,end]
 
 R3 = BPS.BPS1(20000,R.U[:,1,end],0.03,exp(-2*0.03),y=dat20,ϵ=0.2)
 
-R4 = BPS.SMC(1000,100,dat20,Threshold=0.8,δ=0.5,κ=2.0,K0=10,MH=BPS.BPS1)
+R4 = BPS.SMC(1000,300,dat20,Threshold=0.8,δ=0.5,κ=2.0,K0=10,MH=BPS.BPS1)
 
 index = findall(R4.WEIGHT[:,end] .> 0)
 density(R4.U[4,index,end])
