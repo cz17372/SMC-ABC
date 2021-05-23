@@ -6,6 +6,7 @@ f(z;θ) = θ[1] + θ[2]*(1+0.8*(1-exp(-θ[3]*z))/(1+exp(-θ[3]*z)))*(1+z^2)^θ[4
 
 # Defines the boundary for constrained region, parameterized by ϵ
 Dist(x;y) = norm(sort(f.(x[5:end],θ=x[1:4])) .- sort(y))
+#Dist(x;y) = norm(f.(x[5:end],θ=x[1:4]) .- y)
 C(x;y,ϵ)  = Dist(x,y=y) - ϵ
 
 logPrior(x) = sum(logpdf.(Uniform(0,10),x[1:4])) + sum(logpdf.(Normal(0,1),x[5:end]))

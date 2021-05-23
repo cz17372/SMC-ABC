@@ -13,10 +13,11 @@ density(R.U[2,index,end])
 plot(R.BoundaryBounceProposed ./(mapslices(ESS,R.WEIGHT,dims=1)[1,2:end] .* R.K[1:end-1]),label="")
 
 @load "MCMC/MCMC_COV.jld2"
+include("MCMC/MCMC.jl")
 MCMC,α = RWM(200000,Σ,0.2,y=dat20,θ0=rand(Uniform(0,10),4))
+Σ = cov(MCMC[150001:end,:])
 
-
-density(MCMC[50001:end,1])
+density(MCMC[150001:end,1])
 density!(R2.U[1,index,end])
 
 anim = @animate for i = 1:301
@@ -51,11 +52,12 @@ x = R.U[:,1,end]
 
 R3 = BPS.BPS1(20000,R.U[:,1,end],0.03,exp(-2*0.03),y=dat20,ϵ=0.2)
 
-R4 = BPS.SMC(1000,150,dat20,Threshold=0.8,δ=0.5,κ=3.0,K0=10,MH=BPS.BPS1)
-R5 = BPS.SMC(1000,200,dat20,Threshold=0.8,δ=0.5,κ=3.0,K0=10,MH=BPS.BPS1)
+R4 = BPS.SMC(1000,250,dat20,Threshold=0.8,δ=0.5,κ=3.0,K0=10,MH=BPS.BPS1)
+R5 = BPS.SMC(1000,300,dat20,Threshold=0.8,δ=0.5,κ=3.0,K0=10,MH=BPS.BPS1)
 index = findall(R4.WEIGHT[:,end] .> 0)
-density(R4.U[3,index,end])
-histogram(R5.U[3,index,end],bins=20,normalize=true) 
+density(R4.U[1,index,end])
+density!(MCMC[150001:end,3])
+histogram(R4.U[3,index,end],bins=50,normalize=true) 
 plot(R5.K)
 
 dist(x) = norm(sort(f.(x[5:end],θ=x[1:4])) .- sort(dat20))
