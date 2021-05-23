@@ -51,9 +51,18 @@ x = R.U[:,1,end]
 
 R3 = BPS.BPS1(20000,R.U[:,1,end],0.03,exp(-2*0.03),y=dat20,ϵ=0.2)
 
-R4 = BPS.SMC(1000,300,dat20,Threshold=0.8,δ=0.5,κ=2.0,K0=10,MH=BPS.BPS1)
+R4 = BPS.SMC(1000,150,dat20,Threshold=0.8,δ=0.5,κ=2.0,K0=10,MH=BPS.BPS1)
+R5 = BPS.SMC(1000,200,dat20,Threshold=0.8,δ=0.5,κ=3.0,K0=10,MH=BPS.BPS1)
+index = findall(R5.WEIGHT[:,end] .> 0)
+density(R5.U[4,index,end])
+histogram(R5.U[4,index,end],bins=20,normalize=true) 
+plot(R5.K)
 
-index = findall(R4.WEIGHT[:,end] .> 0)
-density(R4.U[4,index,end])
+dist(x) = norm(sort(f.(x[5:end],θ=x[1:4])) .- sort(dat20))
 
+x = samp()
 
+using ForwardDiff:gradient
+
+dist(x)
+x = x .- 0.2*normalize(gradient(dist,x))
