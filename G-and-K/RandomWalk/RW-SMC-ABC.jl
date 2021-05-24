@@ -5,11 +5,11 @@ using Plots, StatsPlots
 theme(:ggplot2)
 f(z;θ) = θ[1] + θ[2]*(1+0.8*(1-exp(-θ[3]*z))/(1+exp(-θ[3]*z)))*(1+z^2)^θ[4]*z;
 
-#=
+
 function Dist(ξ;y)
     return norm(f.(ξ[5:end],θ=ξ[1:4]) .- y)
 end
-=#
+
 
 #=
 function Dist(ξ;y)
@@ -17,6 +17,7 @@ function Dist(ξ;y)
 end
 =#
 
+#=
 function Dist(ξ;y)
     quantile_y = quantile(y,1/8*(1:8))
     x = f.(ξ[5:end],θ =ξ[1:4])
@@ -31,7 +32,7 @@ function Dist(ξ;y)
     yk = (quantile_y[7] - quantile_y[5] + quantile_y[3] - quantile_y[1])/yB
     return norm([xA,xB,xg,xk] .- [yA,yB,yg,yk])
 end
-
+=#
 C(ξ;ϵ,y) = Dist(ξ,y=y) - ϵ
 
 function logpi(ξ;ϵ,y)
@@ -61,7 +62,7 @@ function RWMH(N,x0,ϵ;y,δ,Σ)
     end
     return (X[end,:],AcceptedNum)
 end
-function RW_SMC_ABC(N,T,y;Threshold,δ,K0)
+function SMC(N,T,y;Threshold,δ,K0)
     NoData = length(y)
     U = zeros(4+NoData,N,T+1)
     EPSILON = zeros(T+1)
@@ -101,6 +102,10 @@ function RW_SMC_ABC(N,T,y;Threshold,δ,K0)
         MH_AcceptProb[t] = mean(ParticleAcceptProb[index])/K[t]
         K[t+1] = Int64(ceil(log(0.01)/log(1-MH_AcceptProb[t])))
         println("Average Acceptance Probability is ", MH_AcceptProb[t])
+        if MH_AcceptProb[t] < 0.25
+            δ = exp(log(δ) + 0.3*(MH_AcceptProb[t] - 0.25))
+        end
+        println("The step size used in the next SMC iteration is ",δ)
         print("\n\n")
     end
     return (U=U,DISTANCE=DISTANCE,WEIGHT=WEIGHT,EPSILON=EPSILON,ANCESTOR=ANCESTOR,AcceptanceProb = MH_AcceptProb, K = K)

@@ -53,9 +53,9 @@ x = R.U[:,1,end]
 R3 = BPS.BPS1(20000,R.U[:,1,end],0.03,exp(-2*0.03),y=dat20,ϵ=0.2)
 
 R4 = BPS.SMC(1000,250,dat20,Threshold=0.8,δ=0.5,κ=3.0,K0=10,MH=BPS.BPS1)
-R5 = BPS.SMC(1000,300,dat20,Threshold=0.8,δ=0.5,κ=3.0,K0=10,MH=BPS.BPS1)
-index = findall(R4.WEIGHT[:,end] .> 0)
-density(R4.U[1,index,end])
+R5 = BPS.SMC(1000,300,dat20,Threshold=0.8,δ=1.0,κ=1.0,K0=10,MH=BPS.BPS1)
+index = findall(R5.WEIGHT[:,end] .> 0)
+density(R5.U[1,index,end])
 density!(MCMC[150001:end,3])
 histogram(R4.U[3,index,end],bins=50,normalize=true) 
 plot(R5.K)
@@ -68,3 +68,8 @@ using ForwardDiff:gradient
 
 dist(x)
 x = x .- 0.2*normalize(gradient(dist,x))
+
+RW = RandomWalk.SMC(1000,350,dat20,Threshold=0.8,δ=0.5,K0=10)
+index = findall(RW.WEIGHT[:,end] .> 0)
+density(RW.U[2,index,end])
+plot(RW.AcceptanceProb)
