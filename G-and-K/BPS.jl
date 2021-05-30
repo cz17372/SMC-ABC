@@ -1,121 +1,150 @@
-using Distributions, Plots, StatsPlots, LinearAlgebra, Random
-using ForwardDiff: gradient
+using LinearAlgebra, Distributions, StatsPlots, Plots, Roots
+using ForwardDiff:gradient
+using Random
+C(x) = norm(x) - 2.0
+u0 = normalize(rand(Normal(0,1),2))
+x0 = [0.2,0.3]
+δ  = 3.0
 
-# function used to transform standard Normal to g-and-k
-f(u) = 3.0 + 1.0*(1+0.8*(1-exp(-2.0*u[2]))/(1+exp(-2.0*u[2])))*((1+u[2]^2)^u[1])*u[2];
-Random.seed!(12358)
-zstar = rand(Normal(0,1))
-ystar = f([0.5,zstar])
-
-function dist(u)
-    return sum((f(u) .- ystar).^2)
-end
-C(x;ϵ=ϵ) = ϵ - dist(x)
-function logpi(u;ϵ)
-    if C(u,ϵ=ϵ) > 0
-        logpdf_k = logpdf(Uniform(0,10),u[1])
-        logpdf_z = logpdf(Normal(0,1),u[2])
-        return logpdf_k + logpdf_z
+function logpi(x)
+    if C(x) < 0
+        return logpdf(MultivariateNormal(μ,Σ),x)
     else
         return -Inf
     end
 end
 
-gradu(x) = gradient(x->logpdf(Uniform(0,1),x[1])+logpdf(Normal(0,1),x[2]),x)
-α_pu(x,u,δ;ϵ) = min(0,logpi(x.+δ*u,ϵ=ϵ)-logpi(x,ϵ=ϵ))
-
-function BoundaryReflection(x0,u0,x1,u1,δ;ϵ)
-    if any([x1[1]<0,x1[1]>10])
-        # When the proposal steps outside the boundaries set by the prior
-        u2   = reflect(u1,[sign(10-x1[1]),0])
-        x2   = x1 .+ δ*u2
-        α_dr = min(0,logpi(x2,ϵ=ϵ)-logpi(x0,ϵ=ϵ))
-        if log(rand(Uniform(0,1))) < α_dr
-            return (x2,u2)
-        else
-            return (x0,-u0)
-        end
-    elseif C(x1,ϵ=ϵ) <= 0.0
-        u2 = reflect(u1,gradient(x->C(x,ϵ=ϵ),x1))
-        x2 = x1 .+ δ*u2
-        α_dr = min(0,logpi(x2,ϵ=ϵ)-logpi(x0,ϵ=ϵ))
-        if log(rand(Uniform(0,1))) < α_dr
-            return (x2,u2)
-        else
-            return (x0,-u0)
-        end
+function BoundaryBounce(x0,δ,u0)
+    output = x0
+    working_delta = δ
+    intermediate_x = copy(x0)
+    intermediate_u = copy(u0)
+    while C(intermediate_x .+ working_delta*intermediate_u) >= 0
+        obj(k) = C(intermediate_x .+ k*intermediate_u) 
+        k = find_zero(obj,working_delta)
+        intermediate_x = intermediate_x .+ k*intermediate_u
+        output = hcat(output,intermediate_x)
+        working_delta -= k
+        n = normalize(gradient(C,intermediate_x))
+        intermediate_u = intermediate_u .- 2*dot(intermediate_u,n)*n
     end
+    output = hcat(output,intermediate_x .+ working_delta*intermediate_u)
+    return output,intermediate_u
 end
 
-function EnergyReflection(x0,u0,x1,u1,δ;ϵ)
-    u2 = reflect(u1,gradu(x1))
-    x2 = x1 .+ δ*u2
-    α_dr = min(0,log(1-exp(α_pu(x2,-u2,δ,ϵ=ϵ)))-log(1-exp(α_pu(x0,u0,δ,ϵ=ϵ)))+logpi(x2,ϵ=ϵ)-logpi(x0,ϵ=ϵ))
-    if log(rand(Uniform(0,1))) < α_dr
-        return (x2,u2)
-    else
-        return (x0,-u0)
+
+function BoundaryBounce(x0,δ,u0)
+    output = x0
+    working_delta = δ
+    intermediate_x = copy(x0)
+    intermediate_u = copy(u0)
+    while C(intermediate_x .+ working_delta*intermediate_u) >= 0
+        obj(k) = C(intermediate_x .+ k*intermediate_u) 
+        k = find_zero(obj,working_delta)
+        intermediate_x = intermediate_x .+ k*intermediate_u
+        output = hcat(output,intermediate_x)
+        working_delta -= k
+        n = normalize(gradient(C,intermediate_x))
+        intermediate_u = intermediate_u .- 2*dot(intermediate_u,n)*n
     end
+    output = hcat(output,intermediate_x .+ working_delta*intermediate_u)
+    return output[:,end],intermediate_u
 end
 
-function DirectionRefresh(u0,refresh_rate)
-    ind = rand(Bernoulli(refresh_rate))
-    if ind == 0
+Σ = [1 2; 2 5]
+μ = [0,0]
+U(x) = -logpdf(MultivariateNormal(μ,Σ),x)
+
+function φ1(x0::Vector{Float64},u0::Vector{Float64},δ::Float64)
+    return (x0 .+ δ*u0, -u0)
+end
+
+
+function b(x0::Vector{Float64},u0::Vector{Float64};gradFunc)
+    n = normalize(gradient(gradFunc,x0))
+    return u0 .- 2.0 * dot(u0,n) * n
+end
+
+
+function σ(x0,u0)
+    return (x0,-u0)
+end
+
+
+function φ2(x0::Vector{Float64},u0::Vector{Float64},δ::Float64;gradFunc)
+    x1,u1 = φ1(x0,u0,δ)
+    xflip, uflip = σ(x1,u1)
+    xb = xflip; ub = b(xflip,uflip,gradFunc=gradFunc)
+    x2, u2 = φ1(xb,ub,δ)
+    return x2,u2
+end
+
+function α1(x0,u0,δ)
+    x1,u1 = φ1(x0,u0,δ)
+    return min(0,logpi(x1)-logpi(x0))
+end
+
+function α2(x0,u0,δ)
+    x2,u2 = φ2(x0,u0,δ,gradFunc=U)
+    firstproprejectratio = log(1 - exp(α1(x2,u2,δ))) - log(1 - exp(α1(x0,u0,δ)))
+    llkratio = logpi(x2) - logpi(x0)
+    return min(0,firstproprejectratio + llkratio)
+end
+
+function DirectionRefresh(u0,δ,κ)
+    p = exp(-κ*δ)
+    ind = rand(Bernoulli(p))
+    if ind == 1
         return u0
     else
-        return normalize(rand(Normal(0,1),2))
+        return normalize(rand(Normal(0,1),length(u0)))
     end
 end
 
-function reflect(u,v)
-    v = normalize(v)
-    return u - 2 * (transpose(u)*v)*v
-end
 
-function BPS(N,x0,u0,δ,refresh_rate;ϵ)
-    X       = zeros(N,2)
-    X[1,:]  = x0
+function BPS(N,x0,δ,κ)
+    X = zeros(N,2)
+    X[1,:] = x0
+    u0 = normalize(rand(Normal(0,1),2))
     acc = 0
     for n = 2:N
-        x1 = X[n-1,:] .+ δ*u0
-        u1 = u0
-        if any([x1[1]<0,x1[1]>10,C(x1)<=0])
-            xhat,uhat = BoundaryReflection(X[n-1,:],u0,x1,u1,δ,ϵ=ϵ)
+        x1,u1 = φ1(X[n-1,:],u0,δ)
+        if C(x1) >= 0
+            x2,u2 = BoundaryBounce2(X[n-1,:],δ,u0)
+            if log(rand(Uniform(0,1))) < min(0,logpi(x2)-logpi(X[n-1,:]))
+                acc += 1
+                xhat = x2
+                uhat = u2
+            else
+                xhat = X[n-1,:]
+                uhat = u0
+            end
         else
-            α = α_pu(X[n-1,:],u0,δ,ϵ=ϵ)
-            if log(rand(Uniform(0,1))) < α
+            if log(rand(Uniform(0,1))) < α1(X[n-1,:],u0,δ)
+                acc += 1
                 xhat = x1
                 uhat = u1
             else
-                xhat,uhat = EnergyReflection(X[n-1,:],u0,x1,u1,δ,ϵ=ϵ)
+                x2,u2 = φ2(X[n-1,:],u0,δ,gradFunc=U)
+                if log(rand(Uniform(0,1))) < α2(X[n-1,:],u0,δ)
+                    acc += 1
+                    xhat = x2
+                    uhat = u2
+                else
+                    xhat = X[n-1,:]
+                    uhat = u0
+                end
             end
         end
-        u0 = DirectionRefresh(uhat,refresh_rate)
+        xhat,uhat = σ(xhat,uhat)
+        u0 = DirectionRefresh(uhat,δ,κ)
         X[n,:] = xhat
-        if norm(X[n-1,:] .- X[n,:]) > 1e-10
-            acc += 1
-        end 
     end
-    return (X,acc/N)
+    return X,acc/(N-1)
 end
 
-ϵ=5
-x0 = [rand(Uniform(0,10)),rand(Normal(0,1))]
-while dist(x0) > ϵ
-    x0 = [rand(Uniform(0,10)),rand(Normal(0,1))]
-end
-u0 = normalize(rand(Normal(0,1),2))
 
-# Sample Ground truth
-truth = zeros(10000,2)
-n = 1
-while n <= 10000
-    ucand = [rand(Uniform(0,10)),rand(Normal(0,1))]
-    if C(ucand) > 0
-        truth[n,:] = ucand
-        n += 1
-    end
-end
-X,acc = BPS(10000,x0,u0,0.1,0.5,ϵ=ϵ)
-scatter(truth[:,1],truth[:,2],markersize=0.1,markerstrokewidth=0,color=:red,label="")
-scatter!(X[:,1],X[:,2],markersize=0.1,markerstrokewidth=0,color=:white,label="")
+X,acc = BPS(100000,x0,0.5,2.0)
+plot(X[:,1],X[:,2])
+
+density(X[50001:end,2])
