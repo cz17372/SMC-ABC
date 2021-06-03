@@ -1,282 +1,202 @@
-using Distributions, Random, JLD2, LinearAlgebra, ProgressMeter
-using Flux: gradient
-using ForwardDiff: derivative
-
-# Define the g-and-k function that transform standard Normal RV into the g-and-k RVs
+using LinearAlgebra, Distributions
+using ForwardDiff: gradient
+using ProgressMeter
+using Plots, StatsPlots
+using Random
+using Roots
 f(z;θ) = θ[1] + θ[2]*(1+0.8*(1-exp(-θ[3]*z))/(1+exp(-θ[3]*z)))*(1+z^2)^θ[4]*z;
-function summary(y)
-    E = quantile(y,collect(1/8:1/8:1))
-    S = zeros(4)
-    S[1] = E[4]; S[2] = E[6]-E[2]; S[3] = (E[6]+E[2]-2*E[4])/S[2]
-    S[4] = (E[7]-E[5]+E[3]-E[1])/S[2]
-    return S
-end
-
-#                   Naive-SMC-ABC                                   #
-
-NaivelogPrior(θ) = sum(logpdf.(Uniform(0,10),θ))
-NaiveDist(x) = norm(summary(x) .- summary(ystar))
-
-function NaiveSMCABC_LocalMH(θ0,x0,ϵ; Σ, σ)
-    #=
-    Parameters:
-    ---------------
-    θ0: the current state of the parameters. This will be one of the particle from the previous iteration
-    ϵ : the epsilon value for the current SMC step
-
-    =#
-    
-    # Make a proposal based on random walk with mean θ0 and variance-covariance matrix σ^2*Σ
-
-    newθ = rand(MultivariateNormal(θ0,σ^2*Σ))
-    
-    if NaivelogPrior(newθ) == -Inf
-        # In this case, the proposal is not in the support of the prior, we will straightaway 
-        # reject the proposals
-        return (θ0,x0,0)
+# Defines the boundary for constrained region, parameterized by ϵ
+Dist1(x;y) = norm(sort(f.(x[5:end],θ=x[1:4])) .- sort(y))
+Dist2(x;y) = norm(f.(x[5:end],θ=x[1:4]) .- y)
+C(x;y,ϵ,Dist)  = Dist(x,y=y) - ϵ
+object(k;x0,u0,C) = prod((x0 .+ k*u0)[1:4])*prod((x0 .+ k*u0)[1:4] .- 10.0)*C(x0 .+  k*u0)
+prior_boundary(x0) = any([(abs.(x0[1:4]) .< 1e-15);(abs.(x0[1:4] .- 10.0) .< 1e-15)])
+get_prior_normal(x0) = normalize([(abs.(x0[1:4]) .< 1e-15) .+ (abs.(x0[1:4] .- 10.0) .< 1e-15);zeros(length(x0[5:end]))])
+# define the log-pdf of the prior, constrained by C(ξ;y,ϵ)
+function logpi(x::Vector{Float64};y::Vector{Float64},ϵ::Float64,Dist)
+    if C(x,y=y,ϵ=ϵ,Dist=Dist) > 0
+        return -Inf
     else
-        # In the case where the proposal lies in the support of the prior
-        # 1. We sample a new set of data based on newθ
-        z = rand(Normal(0,1),length(x0))
-        newx = f.(z,θ=newθ)
-        if NaiveDist(newx) < ϵ
-            return (newθ,newx,1)
-        else
-            return (θ0,x0,0)
-        end
+        return logPrior(x)
     end
 end
-function NaiveSMCABC(N,T,NoData;Threshold,σ,λ,Method="ESS")
-    THETA = zeros(4,N,T+1)
+# Define the energy function for internal reflection 
+U(x) = sum(logpdf.(Uniform(0,10),x[1:4])) + sum(logpdf.(Normal(0,1),x[5:end]))
+#---------------------------- Proposal Mechanism ------------------------------#
+function φ1(x0,u0,δ;C)
+    output = x0
+    working_delta = δ
+    intermediate_x = copy(x0)
+    intermediate_u = copy(u0)
+    roots = find_zeros(k->object(k,x0=intermediate_x,u0=intermediate_u,C=C),0,working_delta); roots = roots[roots.>0]
+    boundary_bounce = 0
+    while length(roots) > 0
+        k = roots[1]
+        intermediate_x = intermediate_x .+ k*intermediate_u
+        output = hcat(output,intermediate_x)
+        working_delta -= k
+        if prior_boundary(intermediate_x)
+            n = get_prior_normal(intermediate_x)
+        else
+            boundary_bounce += 1
+            n = normalize(gradient(C,intermediate_x))
+        end
+        intermediate_u = intermediate_u .- 2*dot(intermediate_u,n)*n
+        roots = find_zeros(k->object(k,x0=intermediate_x,u0=intermediate_u,C=C),0,working_delta); roots = roots[roots.>0]
+    end
+    output = hcat(output,intermediate_x .+ working_delta * intermediate_u)
+
+    return output[:,end], -intermediate_u#,size(output)[2]-1
+end
+
+σ(x0,u0) = (x0,-u0)
+#----------------------------- Acceptance Probability ----------------------------#
+function α1(x1,x0)
+    return min(0,U(x1) - U(x0))
+end
+function α2(x2,x1,x0)
+    forward_rejection = log(1 - exp(α1(x1,x0)))
+    backward_rejection = log(1 - exp(α1(x1,x2)))
+    return min(0,backward_rejection+U(x2)-forward_rejection-U(x0))
+end
+
+#--------------------------- Veclocity Update ------------------------------------#
+function DirectionRefresh(u0,δ,κ)
+    p = exp(-κ*δ)
+    ind = rand(Bernoulli(p))
+    if ind == 1
+        return u0
+    else
+        return normalize(rand(Normal(0,1),length(u0)))
+    end
+end
+
+#--------------------------- BPS Sampler ------------------------------------------#
+function BPS1(N::Int64,x0::Vector{Float64},δ::Float64,κ::Float64;y::Vector{Float64},ϵ::Float64,Dist)
+    C0(x) = C(x,y=y,ϵ=ϵ,Dist=Dist)
+    X = zeros(N+1,length(x0))
+    X[1,:] = x0
+    u0 = normalize(rand(Normal(0,1),length(x0)))
+    AcceptedNumber = 0; 
+    for n = 2:(N+1)
+        #println(n)
+        x1,u1 = φ1(X[n-1,:],u0,δ,C=C0)
+        #println("Number of bounces = ",b)
+        if log(rand(Uniform(0,1))) < α1(x1,X[n-1,:])
+            AcceptedNumber += 1
+            xhat = x1
+            uhat = u1
+        else
+            dir = normalize(gradient(U,x1)); 
+            ubound = -u1 .- 2.0 * dot(-u1,dir) * dir
+            x2,u2 = φ1(x1,ubound,δ,C=C0)
+            #println("Number of bounces = ",b)
+            if log(rand(Uniform(0,1))) < α2(x2,x1,X[n-1,:])
+                AcceptedNumber += 1
+                xhat = x2
+                uhat = u2
+            else
+                xhat = X[n-1,:]
+                uhat = u0
+            end
+        end
+        xhat,uhat = σ(xhat,uhat)
+        u0 = DirectionRefresh(uhat,δ,κ)
+        X[n,:] = xhat
+        #println(C0(X[n,:])+ϵ)
+    end
+    return X[end,:], AcceptedNumber
+end
+
+f(z;θ) = θ[1] + θ[2]*(1+0.8*(1-exp(-θ[3]*z))/(1+exp(-θ[3]*z)))*(1+z^2)^θ[4]*z;
+# Set the true static parameters
+θ0 = [3.0,1.0,2.0,0.5];
+# Generate Artificial Data Sets 
+Random.seed!(123);
+dat20 = f.(rand(Normal(0,1),20),θ=θ0);
+
+samp() = [rand(Uniform(0,10),4);rand(Normal(0,1),20)]
+ϵ = 5.0
+x0 = samp()
+while Dist2(x0,y=dat20) >= ϵ
+    x0 = samp()
+end
+
+R = BPS1(50000,x0,0.2,0.5,y=dat20,ϵ=5.0,Dist=Dist2)
+
+function SMC(N::Int64,T::Int64,y::Vector{Float64};Threshold::Float64,δ::Float64,κ::Float64,K0::Int64,MH,Dist)
+    NoData = length(y)
+    U = zeros(4+NoData,N,T+1)
     EPSILON = zeros(T+1)
-    X = zeros(NoData,N,T+1)
     DISTANCE = zeros(N,T+1)
     WEIGHT = zeros(N,T+1)
     ANCESTOR = zeros(Int,N,T)
-    SIGMA = zeros(T+1); SIGMA[1] = σ
-    ACCEPTANCE = zeros(T)
-    # Create the initial particles from prior
+    K = zeros(Int64,T+1)
+    K[1] = K0
     for i = 1:N
-        THETA[:,i,1] = rand(Uniform(0,10),4);
-        z = rand(Normal(0,1),NoData)
-        X[:,i,1] = f.(z,θ=THETA[:,i,1])
-        DISTANCE[i,1] = NaiveDist(X[:,i,1]) 
+        U[:,i,1] = [rand(Uniform(0,10),4);rand(Normal(0,1),NoData)]
+        DISTANCE[i,1] = Dist(U[:,i,1],y=y)
     end
-
-    # Set the initial ϵ to be the largest distance among the initial particles
-    EPSILON[1],_ = findmax(DISTANCE[:,1])
     WEIGHT[:,1] .= 1/N
-
-    acc_vec = zeros(N)
+    EPSILON[1] = findmax(DISTANCE[:,1])[1]
+    ParticleAccepted = zeros(N)
+    MH_AcceptProb = zeros(T)
     for t = 1:T
-        print("Iteration ",t,"\n")
-        # We first do the resampling and determine the next ϵ value based on the resampled particles
         ANCESTOR[:,t] = vcat(fill.(1:N,rand(Multinomial(N,WEIGHT[:,t])))...);
-        # To have a ESS of at least Threshod*N we find the "Threshold" quantile of the distances
-        #=
-        if Method == "ESS"
-            EPSILON[t+1] = quantile(DISTANCE[ANCESTOR[:,t],t],Threshold)
-        elseif Method == "Unique"
-            if length(unique(DISTANCE[ANCESTOR[:,t],t])) >= Threshold
-                EPSILON[t+1] = sort(unique(DISTANCE[ANCESTOR[:,t],t]))[Threshold]
-            else
-                EPSILON[t+1],_ = findmax(unique(DISTANCE[ANCESTOR[:,t],t]))
-            end
-        end
-        =#
-        if Method == "ESS"
-            EPSILON[t+1] = quantile(DISTANCE[ANCESTOR[:,t],t],Threshold)
+        if length(unique(DISTANCE[ANCESTOR[:,t],t])) > Int(floor(0.4*N))
+            EPSILON[t+1] = quantile(unique(DISTANCE[ANCESTOR[:,t],t]),Threshold)
         else
-            if length(unique(DISTANCE[ANCESTOR[:,t],t])) > 4000
-                EPSILON[t+1] = quantile(unique(DISTANCE[ANCESTOR[:,t],t]),Threshold)
-            else
-                EPSILON[t+1],_ = findmax(unique(DISTANCE[ANCESTOR[:,t],t]))
-            end
-        end
-
-        WEIGHT[:,t+1] = (DISTANCE[ANCESTOR[:,t],t] .<= EPSILON[t+1])/sum(DISTANCE[ANCESTOR[:,t],t] .<= EPSILON[t+1])
-        Σ = cov(THETA[:,findall(WEIGHT[:,t].>0),t],dims=2) + 1e-8*I
-        Threads.@threads for i = 1:N
-            THETA[:,i,t+1], X[:,i,t+1],acc_vec[i] = NaiveSMCABC_LocalMH(THETA[:,ANCESTOR[i,t],t],X[:,ANCESTOR[i,t],t],EPSILON[t+1],Σ=Σ,σ = SIGMA[t])
-            DISTANCE[i,t+1] = NaiveDist(X[:,i,t+1])
-        end
-        ACCEPTANCE[t] = mean(acc_vec)
-        SIGMA[t+1] = exp(log(SIGMA[t]) + λ*(ACCEPTANCE[t]-0.234))
-    end
-    return (THETA=THETA,X=X,WEIGHT=WEIGHT,EPSILON=EPSILON,SIGMA=SIGMA,ACCEPTANCE=ACCEPTANCE,ANCESTOR=ANCESTOR,DISTANCE=DISTANCE)
-end
-
-
-#                   Random-Walk SMC-ABC (RW-SMC-ABC)                #
-
-RWlogPrior(ξ) = sum(logpdf.(Uniform(0,10),ξ[1:4])) + sum(logpdf.(Normal(0,1),ξ[5:end]))
-RWDist(ξ)     = norm(summary(f.(ξ[5:end],θ=ξ[1:4])) .- summary(ystar))
-function RWSMCABC_LocalMH(ξ0,ϵ;Σ,σ)
-    # Propose a new particle
-    newξ = rand(MultivariateNormal(ξ0,σ^2*Σ))
-    u = log(rand(Uniform(0,1)))
-    if u > (RWlogPrior(newξ)-RWlogPrior(ξ0))
-        # Early rejection
-        return (ξ0,0)
-    else
-        if RWDist(newξ) < ϵ
-            return (newξ,1)
-        else
-            return (ξ0,0)
-        end
-    end
-end
-function RWSMCABC(N,T,NoData;Threshold,σ,λ,Method="ESS")
-    XI = zeros(4+NoData,N,T+1)
-    EPSILON = zeros(T+1)
-    DISTANCE = zeros(N,T+1)
-    WEIGHT = zeros(N,T+1)
-    ANCESTOR = zeros(Int,N,T)
-    for i = 1:N
-        XI[:,i,1] = [rand(Uniform(0,10),4);rand(Normal(0,1),NoData)]
-        DISTANCE[i,1] = RWDist(XI[:,i,1])
-    end
-
-    SIGMA = zeros(T+1)
-    SIGMA[1] = σ
-    ACCEPTANCE = zeros(T)
-    WEIGHT[:,1] .= 1/N
-
-    EPSILON[1],_ = findmax(DISTANCE[:,1])
-
-    accepted = zeros(N)
-
-    @showprogress 1 "Computing.." for t = 1:T
-        #print("Iteration ",t,"\n")
-        ANCESTOR[:,t] = vcat(fill.(1:N,rand(Multinomial(N,WEIGHT[:,t])))...);
-        #=
-        if Method == "ESS"
-            EPSILON[t+1] = quantile(DISTANCE[ANCESTOR[:,t],t],Threshold)
-        elseif Method == "Unique"
-            if length(unique(DISTANCE[ANCESTOR[:,t],t])) >= Threshold
-                EPSILON[t+1] = sort(unique(DISTANCE[ANCESTOR[:,t],t]))[Threshold]
-            else
-                EPSILON[t+1],_ = findmax(unique(DISTANCE[ANCESTOR[:,t],t]))
-            end
-        end
-        =#
-        if Method == "ESS"
-            EPSILON[t+1] = quantile(DISTANCE[ANCESTOR[:,t],t],Threshold)
-        else
-            if length(unique(DISTANCE[ANCESTOR[:,t],t])) > 4000
-                EPSILON[t+1] = quantile(unique(DISTANCE[ANCESTOR[:,t],t]),Threshold)
-            else
-                EPSILON[t+1],_ = findmax(unique(DISTANCE[ANCESTOR[:,t],t]))
-            end
+            EPSILON[t+1],_ = findmax(unique(DISTANCE[ANCESTOR[:,t],t]))
         end
         WEIGHT[:,t+1] = (DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1])/sum(DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1])
-        Σ = cov(XI[:,findall(WEIGHT[:,t].>0),t],dims=2) + 1e-8*I
-        Threads.@threads for i = 1:N
-            XI[:,i,t+1],accepted[i] = RWSMCABC_LocalMH(XI[:,ANCESTOR[i,t],t],EPSILON[t+1],Σ=Σ,σ=SIGMA[t])
-            DISTANCE[i,t+1] = RWDist(XI[:,i,t+1])
+        println("SMC Step: ", t)
+        println("epsilon = ", round(EPSILON[t+1],sigdigits=5), " No. Unique Starting Point: ", length(unique(DISTANCE[ANCESTOR[:,t],t])))
+        println("K = ", K[t]) 
+        index = findall(WEIGHT[:,t+1] .> 0.0)          
+        println("Performing local Metropolis-Hastings...")
+        @time Threads.@threads for i = 1:length(index)
+            U[:,index[i],t+1], ParticleAccepted[index[i]] = MH(K[t],U[:,ANCESTOR[index[i],t],t],δ,κ,y=y,ϵ=EPSILON[t+1],Dist=Dist)
+            DISTANCE[index[i],t+1] = Dist(U[:,index[i],t+1],y=y)
         end
-        ACCEPTANCE[t] = mean(accepted)
-        SIGMA[t+1] = exp(log(SIGMA[t])+λ*(ACCEPTANCE[t]-0.234))
-    end
-    return (XI=XI,DISTANCE=DISTANCE,WEIGHT=WEIGHT,EPSILON=EPSILON,SIGMA=SIGMA,ACCEPTANCE=ACCEPTANCE,ANCESTOR=ANCESTOR)
-end
-
-
-
-#                   Langevin SMC-ABC (L-SMC-ABC)                    #
-
-LlogPrior(ξ) = sum(logpdf.(Uniform(0,10),ξ[1:4])) + sum(logpdf.(Normal(0,1),ξ[5:end]))
-LDist(ξ) = norm(summary(f.(ξ[5:end],θ=ξ[1:4])) .- summary(ystar))
-gradDist(ξ) = norm(f.(ξ[5:end],θ=ξ[1:4]) .- ystar)^2
-#=
-function grad(ξ)
-    gd = gradient(gradDist,ξ)[1]
-    if norm(gd) > 5
-        return normalize(gd)
-    else
-        return gd
-    end
-end
-=#
-
-grad(ξ)   = normalize(gradient(gradDist,ξ)[1])
-
-function LSMCABC_LocalMH(ξ0,ϵ;Σ,σ)
-    #μ = ξ0 .- σ^2/2 * Σ * grad(ξ0) 
-    μ = ξ0 .- σ^2/2 * Σ * grad(ξ0) 
-    newξ = rand(MultivariateNormal(μ,σ^2*Σ))
-
-    reverseμ = newξ .- σ^2/2 * Σ * grad(newξ)
-    
-    forward_proposal_density = logpdf(MultivariateNormal(ξ0,σ^2*Σ),newξ)
-    backward_proposal_density = logpdf(MultivariateNormal(reverseμ,σ^2*Σ),ξ0)
-
-    log_proposal_ratio = backward_proposal_density-forward_proposal_density
-
-    log_prior_ratio = LlogPrior(newξ) - LlogPrior(ξ0)
-
-    u = log(rand(Uniform(0,1)))
-    
-    if u >= log_proposal_ratio + log_prior_ratio
-        return (ξ0,0)
-    else
-        if LDist(newξ) < ϵ
-            return (newξ,1)
+        MH_AcceptProb[t] = mean(ParticleAccepted[index])/(K[t])
+        println("Average Acceptance Probability is ", MH_AcceptProb[t])
+        if MH_AcceptProb[t] >= 1.0
+            K[t+1] = 1
         else
-            return (ξ0,0)
+            K[t+1] = Int(ceil(log(0.01)/log(1-MH_AcceptProb[t])))
         end
+        if MH_AcceptProb[t] < 0.5
+            δ = exp(log(δ) + 0.3*(MH_AcceptProb[t] - 0.5))
+        end
+        println("The step size used in the next SMC iteration is ",δ)
+        print("\n\n")
     end
+    return (U=U,DISTANCE=DISTANCE,WEIGHT=WEIGHT,EPSILON=EPSILON,ANCESTOR=ANCESTOR,AcceptanceProb=MH_AcceptProb,K=K)
 end
-function LSMCABC(N,T,NoData;Threshold,σ,λ,Method="ESS")
-    XI = zeros(4+NoData,N,T+1)
-    EPSILON = zeros(T+1)
-    DISTANCE = zeros(N,T+1)
-    WEIGHT = zeros(N,T+1)
-    ANCESTOR = zeros(Int,N,T)
 
-    for i = 1:N
-        XI[:,i,1] = [rand(Uniform(0,10),4);rand(Normal(0,1),NoData)]
-        DISTANCE[i,1] = LDist(XI[:,i,1])
-    end
+u0 = normalize(rand(Normal(0,1),24))
+C0(x) = C(x,y=dat20,ϵ=ϵ,Dist=Dist2)
+X,u = φ1(x0,u0,0.5,C = C0)
+X2,u2 =  φ1(x0,u0,0.5,C = C0)
+α2(X2,X,x0)
+Dist2(X2,y=dat20)
 
-    SIGMA = zeros(T+1)
-    SIGMA[1] = σ
+plot(R[1][:,2])
 
-    ACCEPTANCE = zeros(T)
-    WEIGHT[:,1] .= 1/N
-    EPSILON[1],_ = findmax(DISTANCE[:,1])
-    accepted = zeros(N)
-    @showprogress 1 "Computing..." for t = 1:T
-        # print("Iteration ",t,"\n")
-        ANCESTOR[:,t] = vcat(fill.(1:N,rand(Multinomial(N,WEIGHT[:,t])))...)
-        #=
-        if Method == "ESS"
-            EPSILON[t+1] = quantile(DISTANCE[ANCESTOR[:,t],t],Threshold)
-        elseif Method == "Unique"
-            if length(unique(DISTANCE[ANCESTOR[:,t],t])) >= Threshold
-                EPSILON[t+1] = sort(unique(DISTANCE[ANCESTOR[:,t],t]))[Threshold]
-            else
-                EPSILON[t+1],_ = findmax(unique(DISTANCE[ANCESTOR[:,t],t]))
-            end
-        end
-        =#
-        if Method == "ESS"
-            EPSILON[t+1] = quantile(DISTANCE[ANCESTOR[:,t],t],Threshold)
-        else
-            if length(unique(DISTANCE[ANCESTOR[:,t],t])) > 4000
-                EPSILON[t+1] = quantile(unique(DISTANCE[ANCESTOR[:,t],t]),Threshold)
-            else
-                EPSILON[t+1],_ = findmax(unique(DISTANCE[ANCESTOR[:,t],t]))
-            end
-        end
-        WEIGHT[:,t+1] = (DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1])/sum(DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1])
-        Σ = cov(XI[:,findall(WEIGHT[:,t].>0),t],dims=2) + 1e-8*I
-        Threads.@threads for i = 1:N
-            XI[:,i,t+1],accepted[i] = LSMCABC_LocalMH(XI[:,ANCESTOR[i,t],t],EPSILON[t+1],Σ=Σ,σ=SIGMA[t])
-            DISTANCE[i,t+1] = LDist(XI[:,i,t+1])
-        end
-        ACCEPTANCE[t] = mean(accepted)
-        SIGMA[t+1] = exp(log(SIGMA[t]) + λ*(ACCEPTANCE[t] - 0.456) )
-    end
-    return (XI=XI,DISTANCE=DISTANCE,EPSILON=EPSILON,WEIGHT=WEIGHT,SIGMA=SIGMA,ACCEPTANCE=ACCEPTANCE,ANCESTOR=ANCESTOR)
-end
+density(R[1][:,1])
+
+R = SMC(1000,200,dat20,Threshold=0.8,δ=0.3,κ=1.0,K0 = 5,MH=BPS1,Dist=Dist2)
+
+index = findall(R.WEIGHT[:,end] .> 0)
+density(R.U[4,index,end])
+
+R2 = SMC(1000,200,dat20,Threshold=0.8,δ=0.5,κ=1.0,K0 = 5,MH=BPS1,Dist=Dist2)
+index = findall(R2.WEIGHT[:,end] .> 0)
+density(R2.U[4,index,end])
+
+R3 = SMC(1000,200,dat20,Threshold=0.8,δ=0.4,κ=1.0,K0 = 5,MH=BPS1,Dist=Dist2)
+index = findall(R3.WEIGHT[:,end] .> 0)
+density(R3.U[1,index,end])
+
+
+R4 = SMC(1000,200,dat20,Threshold=0.8,δ=0.3,κ=1.0,K0 = 5,MH=BPS1,Dist=Dist1)

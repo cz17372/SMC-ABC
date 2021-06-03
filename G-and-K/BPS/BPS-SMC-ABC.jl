@@ -1,23 +1,18 @@
 module BPS
 using LinearAlgebra, Distributions
 using ForwardDiff: gradient
+using ProgressMeter
 using Plots, StatsPlots
 f(z;θ) = θ[1] + θ[2]*(1+0.8*(1-exp(-θ[3]*z))/(1+exp(-θ[3]*z)))*(1+z^2)^θ[4]*z;
 # Defines the boundary for constrained region, parameterized by ϵ
 Dist1(x;y) = norm(sort(f.(x[5:end],θ=x[1:4])) .- sort(y))
 Dist2(x;y) = norm(f.(x[5:end],θ=x[1:4]) .- y)
 C(x;y,ϵ,Dist)  = Dist(x,y=y) - ϵ
-logPrior(x) = sum(logpdf.(Uniform(0,10),x[1:4])) + sum(logpdf.(Normal(0,1),x[5:end]))
-# define the log-pdf of the prior, constrained by C(ξ;y,ϵ)
-function logpi(x::Vector{Float64};y::Vector{Float64},ϵ::Float64,Dist)
-    if C(x,y=y,ϵ=ϵ,Dist=Dist) > 0
-        return -Inf
-    else
-        return logPrior(x)
-    end
-end
+object(k;x0,u0,C) = prod((x0 .+ k*u0)[1:4])*prod((x0 .+ k*u0)[1:4] .- 10.0)*C(x0 .+  k*u0)
+prior_boundary(x0) = any([(abs.(x0[1:4]) .< 1e-15);(abs.(x0[1:4] .- 10.0) .< 1e-15)])
+get_prior_normal(x0) = normalize([(abs.(x0[1:4]) .< 1e-15) .+ (abs.(x0[1:4] .- 10.0) .< 1e-15);zeros(length(x0[5:end]))])
 # Define the energy function for internal reflection 
-U(x) = -logPrior(x)
+U(x) = sum(logpdf.(Uniform(0,10),x[1:4])) + sum(logpdf.(Normal(0,1),x[5:end]))
 
 #---------------------------- Proposal Mechanism ------------------------------#
 function φ1(x0::Vector{Float64},u0::Vector{Float64},δ::Float64)
