@@ -20,5 +20,5 @@ for i = 1:30
     K[i]       = R.K 
     α[i]       = R.AcceptanceProb
     Index      = findall(R.WEIGHT[:,end] .> 0)
-    Theta[i]   = R.U[1:4,index,end]
+    Theta[i]   = R.U[1:4,Index,end]
 end
