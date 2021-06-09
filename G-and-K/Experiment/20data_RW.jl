@@ -29,15 +29,18 @@ println("Eneter the Threshold value:")
 Threshold = readline()
 Threshold = parse(Float64,Threshold)
 
+println("No of simulations performed")
+m = readline()
+m = parse(Int64,m)
 
 
-EPSILON = Array{Any,1}(undef,30)
-K       = Array{Any,1}(undef,30)
-α       = Array{Any,1}(undef,30)
-Theta   = Array{Any,1}(undef,30)
+EPSILON = Array{Any,1}(undef,m)
+K       = Array{Any,1}(undef,m)
+α       = Array{Any,1}(undef,m)
+Theta   = Array{Any,1}(undef,m)
 
 
-for i = 1:30
+for i = 1:m
     R = RandomWalk.SMC(N,T,dat20,Threshold=Threshold,δ = δ,K0 = 5)
     EPSILON[i] = R.EPSILON
     K[i]       = R.K 
