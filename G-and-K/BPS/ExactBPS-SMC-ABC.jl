@@ -195,6 +195,6 @@ function SMC(N::Int64,T::Int64,y::Vector{Float64};Threshold::Float64,δ::Float64
         println("The step size used in the next SMC iteration is ",δ)
         print("\n\n")
     end
-    return (U=U,DISTANCE=DISTANCE,WEIGHT=WEIGHT,EPSILON=EPSILON,ANCESTOR=ANCESTOR,AcceptanceProb=MH_AcceptProb,K=K)
+    return (U=U,DISTANCE=DISTANCE,WEIGHT=WEIGHT,EPSILON=EPSILON,ANCESTOR=ANCESTOR,AcceptanceProb=MH_AcceptProb,K=K,AveBounceNo=AveBounceNo)
 end
 end
