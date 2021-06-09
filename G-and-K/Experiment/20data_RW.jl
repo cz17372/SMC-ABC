@@ -3,7 +3,7 @@
 using Distributions, Random, JLD2
 
 println("Enter the seeds:")
-seed = readlin()
+seed = readline()
 seed = parse(Int64,seed)
 println("Enter the number of data:")
 nodata = readline()
@@ -52,5 +52,5 @@ end
 Results = (EPSILON=EPSILON,K=K,alpha=α,Theta=Theta)
 
 println("The name for the result file:")
-name = realine()
+name = readline()
 @save name Results
