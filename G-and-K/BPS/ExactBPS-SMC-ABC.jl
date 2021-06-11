@@ -43,7 +43,6 @@ function φ1(x0,u0,δ;C)
         roots = find_zeros(k->object(k,x0=intermediate_x,u0=intermediate_u,C=C),0,working_delta); roots = roots[roots.>0]
     end
     output = hcat(output,intermediate_x .+ working_delta * intermediate_u)
-
     return output[:,end], -intermediate_u, No_Bounces
 end
 
@@ -184,14 +183,19 @@ function SMC(N::Int64,T::Int64,y::Vector{Float64};Threshold::Float64,δ::Float64
         AveBounceNo[t]   = mean(BounceNoVec[index])
         println("Average Number of Bounces per proposal = ",AveBounceNo[t])
         println("Average Acceptance Probability is ", MH_AcceptProb[t])
+        if AveBounceNo[t] >= 2.0
+            δ = 0.95*δ
+        end
         if MH_AcceptProb[t] >= 1.0
             K[t+1] = 1
         else
             K[t+1] = Int(ceil(log(0.01)/log(1-MH_AcceptProb[t])))
         end
+        #=
         if MH_AcceptProb[t] < 0.5
             δ = exp(log(δ) + 0.3*(MH_AcceptProb[t] - 0.5))
         end
+        =#
         println("The step size used in the next SMC iteration is ",δ)
         print("\n\n")
     end

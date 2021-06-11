@@ -101,11 +101,9 @@ function SMC(N,T,y;Threshold,δ,K0)
         end
         MH_AcceptProb[t] = mean(ParticleAcceptProb[index])/K[t]
         K[t+1] = Int64(ceil(log(0.01)/log(1-MH_AcceptProb[t])))
-        #=
         if MH_AcceptProb[t] < 0.25
             δ = exp(log(δ) + 0.3*(MH_AcceptProb[t] - 0.25))
         end
-        =#
         println("Average Acceptance Probability is ", MH_AcceptProb[t])
         println("The step size used in the next SMC iteration is ",δ)
         print("\n\n")

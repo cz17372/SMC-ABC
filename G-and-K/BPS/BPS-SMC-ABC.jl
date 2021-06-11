@@ -7,9 +7,15 @@ f(z;θ) = θ[1] + θ[2]*(1+0.8*(1-exp(-θ[3]*z))/(1+exp(-θ[3]*z)))*(1+z^2)^θ[4
 # Defines the boundary for constrained region, parameterized by ϵ
 Dist2(x;y) = norm(f.(x[5:end],θ=x[1:4]) .- y)
 C(x;y,ϵ,Dist)  = Dist(x,y=y) - ϵ
-object(k;x0,u0,C) = prod((x0 .+ k*u0)[1:4])*prod((x0 .+ k*u0)[1:4] .- 10.0)*C(x0 .+  k*u0)
-prior_boundary(x0) = any([(abs.(x0[1:4]) .< 1e-15);(abs.(x0[1:4] .- 10.0) .< 1e-15)])
-get_prior_normal(x0) = normalize([(abs.(x0[1:4]) .< 1e-15) .+ (abs.(x0[1:4] .- 10.0) .< 1e-15);zeros(length(x0[5:end]))])
+function logpi(ξ;ϵ,y,Dist)
+    if C(ξ,ϵ=ϵ,y=y,Dist=Dist) < 0
+        logpdf_θ = sum(logpdf.(Uniform(0,10),ξ[1:4]))
+        logpdf_z = sum(logpdf.(Normal(0,1),ξ[5:end]))
+        return logpdf_θ + logpdf_z
+    else
+        return -Inf
+    end
+end
 # Define the energy function for internal reflection 
 U(x) = sum(logpdf.(Uniform(0,10),x[1:4])) + sum(logpdf.(Normal(0,1),x[5:end]))
 
@@ -59,7 +65,7 @@ function DirectionRefresh(u0,δ,κ)
     if ind == 1
         return u0
     else
-        return normalize(rand(Normal(0,1),length(u0)))
+        return rand(Normal(0,1/sqrt(length(u0))),length(u0))
     end
 end
 
@@ -68,7 +74,7 @@ function BPS1(N::Int64,x0::Vector{Float64},δ::Float64,κ::Float64;y::Vector{Flo
     boundfunc(x) = C(x,y=y,ϵ=ϵ,Dist=Dist)
     X = zeros(N,length(x0))
     X[1,:] = x0
-    u0 = normalize(rand(Normal(0,1),length(x0)))
+    u0 = rand(Normal(0,1/sqrt(length(x0))),length(x0))
     AcceptedNumber = 0; BoundaryBounceProposed = 0; BoundaryBounceAccepted = 0;
     for n = 2:N
         #println(n)
@@ -248,8 +254,8 @@ function SMC(N::Int64,T::Int64,y::Vector{Float64};Threshold::Float64,δ::Float64
         println("Proportion of internal proposal is ",1 - BoundaryBounceProposed[t]/(length(index)*K[t]))
         BoundaryBounceAccepted[t] = sum(BoundaryBounceSuccessVec[index])
         K[t+1] = Int(ceil(log(0.01)/log(1-MH_AcceptProb[t])))
-        if MH_AcceptProb[t] < 0.5
-            δ = exp(log(δ) + 0.3*(MH_AcceptProb[t] - 0.5))
+        if MH_AcceptProb[t] < 0.4
+            δ = exp(log(δ) + 0.2*(MH_AcceptProb[t] - 0.4))
         end
         println("The step size used in the next SMC iteration is ",δ)
         print("\n\n")
@@ -277,5 +283,63 @@ function epdf(R,Var,t;title="",label="",xlabel="",ylabel="Density",trueval=nothi
     end
 end
 
+function FullBPS(N::Int64,x0::Vector{Float64},δ::Float64,κ::Float64;y::Vector{Float64},ϵ::Float64,Dist,MaxBounce=20)
+    boundfunc(x) = C(x,y=y,ϵ=ϵ,Dist=Dist)
+    X = zeros(N,length(x0))
+    X[1,:] = x0
+    u0 = rand(Normal(0,1/sqrt(length(x0))),length(x0))
+    AcceptedNumber = 0; BoundaryBounceProposed = 0; BoundaryBounceAccepted = 0; MaxBounceReached=0
+    @showprogress 1 "Computing.." for n = 2:N
+        #println(n)
+        x1,u1 = φ1(X[n-1,:],u0,δ)
+        if (any([(x1[1:4].>10);(x1[1:4] .< 0)])) || (Dist(x1,y=y) >= ϵ)
+            BoundaryBounceProposed += 1
+            x2,u2 = φ2(X[n-1,:],u0,δ,BounceType=BoundaryBounce,gradFunc=boundfunc)
+            iter = 1
+            while (any([(x2[1:4].>10);(x2[1:4] .< 0)])) || (Dist(x2,y=y) >= ϵ)
+                iter += 1
+                x2,u2 = φ2(x2 .+ δ*u2,-u2,δ,BounceType=BoundaryBounce,gradFunc=boundfunc)
+                if iter > MaxBounce
+                    MaxBounceReached += 1
+                    break
+                end
+            end
+            alpha2 = logpi(x2,y=y,ϵ=ϵ,Dist=Dist) - logpi(X[n-1,:],y=y,ϵ=ϵ,Dist=Dist)
+            if log(rand(Uniform(0,1))) < alpha2
+                BoundaryBounceAccepted += 1
+                AcceptedNumber += 1
+                xhat=x2
+                uhat=u2
+            else
+                xhat=X[n-1,:]
+                uhat=u0
+            end
+        else
+            alpha1 = α1(X[n-1,:],u0,δ;y=y,ϵ=ϵ,Dist=Dist)
+            if log(rand(Uniform(0,1))) < alpha1
+                AcceptedNumber += 1
+                xhat = x1
+                uhat = u1
+            else
+                x2,u2 = φ2(X[n-1,:],u0,δ,BounceType=EnergyBounce,gradFunc=U)
+                alpha2 = α2(X[n-1,:],u0,δ;y=y,ϵ=ϵ,BounceType=EnergyBounce,gradFunc=U,Dist=Dist)
+                if log(rand(Uniform(0,1))) < alpha2
+                    AcceptedNumber += 1
+                    xhat = x2
+                    uhat = u2
+                else
+                    xhat = X[n-1,:]
+                    uhat = u0
+                end
+            end
+        end
+        # Velocity flip
+        xhat,uhat = σ(xhat,uhat)
+        # Refresh Velocity
+        X[n,:] = xhat
+        u0 = DirectionRefresh(uhat,δ,κ)
+    end
+    return X,BoundaryBounceProposed,BoundaryBounceAccepted,AcceptedNumber,MaxBounceReached
+end
 end
 

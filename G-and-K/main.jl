@@ -1,4 +1,4 @@
-using Base: task_result
+using Plots
 using Random, Distributions, JLD2, LinearAlgebra
 using Plots,StatsPlots
 # Transformation of standard normal RV's to g-and-k
@@ -12,7 +12,9 @@ include("Langevin/Langevin-SMC-ABC.jl")
 include("BPS/BPS-SMC-ABC.jl")
 include("RandomWalk/RW-SMC-ABC.jl")
 
-
+include("MCMC/MCMC.jl")
+R,α = RWM(500000,Σ,0.2,y=dat20)
+Σ = cov(R[50001:end,:])
 @load "20data_RW_Results.jld2" Results
 
 U = Results.Theta
@@ -34,3 +36,46 @@ for n = 2:30
 end
 current()
 
+@load "20data_RW_2000Particles.jld2" Results
+U = Results.Theta
+
+t = 3
+density(U[1][t,:],label="",linewidth=0.2,color=:grey)
+for n = 2:30
+    density!(U[n][t,:],label="",linewidth=0.2,color=:grey)
+end
+current()
+density!(R[400001:end,t],color=:red,label="",linewidth=2)
+
+plot(R[:,2])
+density(R[400001:end,1])
+
+@load "100data_RW_1000Particles.jld2" 
+U = Results.Theta
+plot(log.(Results.alpha[1]),label="")
+for n = 2:30
+    plot!(log.(Results.alpha[n]),label="")
+end
+current()
+
+density!(R[400001:end,t],color=:red,label="",linewidth=2)
+
+plot(Results.K[1],label="")
+for n = 2:30
+    plot!(Results.K[n],label="")
+end
+current()
+
+@load "100data_RW_1000Particles.jld2" 
+U = Results.Theta
+t = 4
+density(U[1][t,:],label="",linewidth=0.2,color=:grey)
+for n = 2:30
+    density!(U[n][t,:],label="",linewidth=0.2,color=:grey)
+end
+current()
+@load "test.jld2" 
+U = Results.Theta
+density!(U[1][4,:])
+
+plot(log.(Results.alpha[1]))
