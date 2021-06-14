@@ -68,7 +68,7 @@ current()
 
 @load "100data_RW_1000Particles.jld2" 
 U = Results.Theta
-t = 4
+t = 2
 density(U[1][t,:],label="",linewidth=0.2,color=:grey)
 for n = 2:30
     density!(U[n][t,:],label="",linewidth=0.2,color=:grey)
