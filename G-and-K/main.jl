@@ -79,3 +79,8 @@ U = Results.Theta
 density!(U[1][4,:])
 
 plot(log.(Results.alpha[1]))
+
+@load "Experiment/try.jld2"
+U = Results.Theta
+
+density(U[1][4,:])

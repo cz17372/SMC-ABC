@@ -70,7 +70,7 @@ function DirectionRefresh(u0,δ,κ)
 end
 
 #--------------------------- BPS Sampler ------------------------------------------#
-function BPS1(N::Int64,x0::Vector{Float64},δ::Float64,κ::Float64;y::Vector{Float64},ϵ::Float64,Dist)
+function BPS1(N::Int64,x0::Vector{Float64},δ::Float64,κ::Float64;y::Vector{Float64},ϵ::Float64,Dist,MaxBounce=20)
     boundfunc(x) = C(x,y=y,ϵ=ϵ,Dist=Dist)
     X = zeros(N,length(x0))
     X[1,:] = x0
@@ -86,7 +86,7 @@ function BPS1(N::Int64,x0::Vector{Float64},δ::Float64,κ::Float64;y::Vector{Flo
             while (any([(x2[1:4].>10);(x2[1:4] .< 0)])) || (Dist(x2,y=y) >= ϵ)
                 iter += 1
                 x2,u2 = φ2(x2 .+ δ*u2,-u2,δ,BounceType=BoundaryBounce,gradFunc=boundfunc)
-                if iter > 20
+                if iter > MaxBounce
                     break
                 end
             end
@@ -212,7 +212,7 @@ Perform SMC-ABC algorithm with Discrete Bouncy Particle Sampler algorithm for lo
 - `K0::Float`: The initial number of iterations for each discrete BPS chain
 - `MH`       : The BPS sampler used within the SMC algorithm. Current choice includes `BPS1` and `BPS2`
 """
-function SMC(N::Int64,T::Int64,y::Vector{Float64};Threshold::Float64,δ::Float64,κ::Float64,K0::Int64,MH,Dist)
+function SMC(N::Int64,T::Int64,y::Vector{Float64};Threshold::Float64,δ::Float64,κ::Float64,K0::Int64,MH,Dist,MaxBounce=20,AcceptLowerbound= 0.5, MinStepSize=0.0)
     NoData = length(y)
     U = zeros(4+NoData,N,T+1)
     EPSILON = zeros(T+1)
@@ -245,7 +245,7 @@ function SMC(N::Int64,T::Int64,y::Vector{Float64};Threshold::Float64,δ::Float64
         index = findall(WEIGHT[:,t+1] .> 0.0)          
         println("Performing local Metropolis-Hastings...")
         @time Threads.@threads for i = 1:length(index)
-            U[:,index[i],t+1], BoundaryBounceTimeVec[index[i]], BoundaryBounceSuccessVec[index[i]], ParticleAccepted[index[i]] = MH(K[t],U[:,ANCESTOR[index[i],t],t],δ,κ,y=y,ϵ=EPSILON[t+1],Dist=Dist)
+            U[:,index[i],t+1], BoundaryBounceTimeVec[index[i]], BoundaryBounceSuccessVec[index[i]], ParticleAccepted[index[i]] = MH(K[t],U[:,ANCESTOR[index[i],t],t],δ,κ,y=y,ϵ=EPSILON[t+1],Dist=Dist,MaxBounce=MaxBounce)
             DISTANCE[index[i],t+1] = Dist(U[:,index[i],t+1],y=y)
         end
         MH_AcceptProb[t] = mean(ParticleAccepted[index])/(K[t])
@@ -254,8 +254,8 @@ function SMC(N::Int64,T::Int64,y::Vector{Float64};Threshold::Float64,δ::Float64
         println("Proportion of internal proposal is ",1 - BoundaryBounceProposed[t]/(length(index)*K[t]))
         BoundaryBounceAccepted[t] = sum(BoundaryBounceSuccessVec[index])
         K[t+1] = Int(ceil(log(0.01)/log(1-MH_AcceptProb[t])))
-        if MH_AcceptProb[t] < 0.4
-            δ = exp(log(δ) + 0.2*(MH_AcceptProb[t] - 0.4))
+        if (MH_AcceptProb[t] < AcceptLowerbound) & (δ > MinStepSize) 
+            δ = exp(log(δ) + 0.3*(MH_AcceptProb[t] - AcceptLowerbound))
         end
         println("The step size used in the next SMC iteration is ",δ)
         print("\n\n")

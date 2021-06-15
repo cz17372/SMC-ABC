@@ -62,7 +62,7 @@ function RWMH(N,x0,ϵ;y,δ,Σ)
     end
     return (X[end,:],AcceptedNum)
 end
-function SMC(N,T,y;Threshold,δ,K0)
+function SMC(N,T,y;Threshold,δ,K0,MinAcceptProbability,MinStepSize)
     NoData = length(y)
     U = zeros(4+NoData,N,T+1)
     EPSILON = zeros(T+1)
@@ -101,8 +101,8 @@ function SMC(N,T,y;Threshold,δ,K0)
         end
         MH_AcceptProb[t] = mean(ParticleAcceptProb[index])/K[t]
         K[t+1] = Int64(ceil(log(0.01)/log(1-MH_AcceptProb[t])))
-        if MH_AcceptProb[t] < 0.25
-            δ = exp(log(δ) + 0.3*(MH_AcceptProb[t] - 0.25))
+        if (MH_AcceptProb[t] < MinAcceptProbability) & (δ > MinStepSize)
+            δ = exp(log(δ) + 0.3*(MH_AcceptProb[t] - MinAcceptProbability))
         end
         println("Average Acceptance Probability is ", MH_AcceptProb[t])
         println("The step size used in the next SMC iteration is ",δ)
