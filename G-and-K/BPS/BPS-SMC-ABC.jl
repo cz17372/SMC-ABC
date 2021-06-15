@@ -267,14 +267,14 @@ end
 function epdf(R,Var,t;title="",label="",xlabel="",ylabel="Density",trueval=nothing,color=:springgreen,new=true,figsize=(600,600))
     index = findall(R.WEIGHT[:,t] .> 0)
     if new
-        if trueval == nothing
+        if trueval === nothing
             density(R.U[Var,index,t],title=title,label=label,xlabel=xlabel,ylabel=ylabel,color=color,size=figsize)
         else
             density(R.U[Var,index,t],title=title,label=label,xlabel=xlabel,ylabel=ylabel,color=color,size=figsize)
             vline!([trueval],color=:red,label="true value")
         end
     else
-        if trueval == nothing
+        if trueval === nothing
             density!(R.U[Var,index,t],title=title,label=label,xlabel=xlabel,ylabel=ylabel,color=color,size=figsize)
         else
             density!(R.U[Var,index,t],title=title,label=label,xlabel=xlabel,ylabel=ylabel,color=color)
