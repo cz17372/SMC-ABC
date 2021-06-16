@@ -54,8 +54,8 @@ println("No of simulations performed")
 m = readline()
 m = parse(Int64,m)
 
-println("Information:")
-Information = readline()
+
+Information = (seed=seed,NoData=nodata,N=N,T=T,Threshold=Threshold,κ=κ,MaxBounce=MaxBounces,MinAcceptProb=AcceptLowerbound,MaxStep=δ,MinStep=MinStepSize)
 
 EPSILON = Array{Any,1}(undef,m)
 K       = Array{Any,1}(undef,m)

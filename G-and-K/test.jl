@@ -1,10 +1,10 @@
-using Plots: reset_defaults
 using JLD2, Plots, StatsPlots
 cd("G-and-K")
-n = 4
-@load "20data_RW_1000Particles.jld2"
+include("utils.jl")
+n = 3
+@load "data/20data_RW_1000Particles_Fixed.jld2"
 data20_1000Particles_RW_Fixed = Results
-@load "20data_RW_1000Particles2.jld2"
+@load "data/20data_RW_1000Particles_Adaptive.jld2"
 data20_1000Particles_RW_Adaptive = Results
 
 p1 = plotposterior(data20_1000Particles_RW_Adaptive,n,title="Adaptive Stepsize, 1000 Particles")
