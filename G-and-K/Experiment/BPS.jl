@@ -55,7 +55,7 @@ m = readline()
 m = parse(Int64,m)
 
 
-Information = (seed=seed,NoData=nodata,N=N,T=T,Threshold=Threshold,κ=κ,MaxBounce=MaxBounces,MinAcceptProb=AcceptLowerbound,MaxStep=δ,MinStep=MinStepSize)
+Information = (seed=seed,NoData=nodata,N=N,T=T,Threshold=Threshold,κ=κ,MaxBounce=MaxBounce,MinAcceptProb=AcceptLowerbound,MaxStep=δ,MinStep=MinStepSize)
 
 EPSILON = Array{Any,1}(undef,m)
 K       = Array{Any,1}(undef,m)
