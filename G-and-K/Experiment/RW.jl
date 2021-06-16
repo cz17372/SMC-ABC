@@ -37,8 +37,8 @@ println("The minimum step size:")
 MinStepSize = readline()
 MinStepSize = parse(Float64,MinStepSize)
 
-println("Information:")
-Information = readline()
+
+Information = (seed=seed,NoData=nodata,N=N,T=T,MaxStep=δ,MinStep=MinStepSize,Threshold=Threshold,MinAcceptProb=MinAcceptProbability)
 
 println("No of simulations performed")
 m = readline()
