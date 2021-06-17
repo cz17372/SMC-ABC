@@ -21,15 +21,34 @@ function plotK(Data;title="",label="",xlabel="",ylabel="",color=:grey,linewidth=
     U = Data.K
     no_replica = length(U)
     if new
-        plot(U[1],title=title,label=label,xlabel=xlabel,ylabel=ylabel,color=color,linewitdh=linewidth,size=size)
+        plot(log.(U[1]),title=title,label=label,xlabel=xlabel,ylabel=ylabel,color=color,linewitdh=linewidth,size=size)
         for m = 2:no_replica
-            plot!(U[m],label=label,xlabel=xlabel,ylabel=ylabel,color=color,linewidth=linewidth)
+            plot!(log.(U[m]),label="",xlabel=xlabel,ylabel=ylabel,color=color,linewidth=linewidth)
         end
         current()
     else
-        plot!(U[1],title=title,label=label,xlabel=xlabel,ylabel=ylabel,color=color,linewitdh=linewidth,size=size)
+        plot!(log.(U[1]),title=title,label=label,xlabel=xlabel,ylabel=ylabel,color=color,linewitdh=linewidth,size=size)
         for m = 2:no_replica
-            plot!(U[m],label=label,xlabel=xlabel,ylabel=ylabel,color=color,linewidth=linewidth)
+            plot!(log.(U[m]),label="",xlabel=xlabel,ylabel=ylabel,color=color,linewidth=linewidth)
+        end
+        current()
+    end
+end
+
+
+function plotepsilon(Data;title="",label="",xlabel="",ylabel="",color=:grey,linewidth=0.2,new=true,size=(600,600))
+    U = Data.EPSILON
+    no_replica = length(U)
+    if new
+        plot(log.(U[1]),title=title,label=label,xlabel=xlabel,ylabel=ylabel,color=color,linewitdh=linewidth,size=size)
+        for m = 2:no_replica
+            plot!(log.(U[m]),label="",xlabel=xlabel,ylabel=ylabel,color=color,linewidth=linewidth)
+        end
+        current()
+    else
+        plot!(log.(U[1]),title=title,label=label,xlabel=xlabel,ylabel=ylabel,color=color,linewitdh=linewidth,size=size)
+        for m = 2:no_replica
+            plot!(log.(U[m]),label="",xlabel=xlabel,ylabel=ylabel,color=color,linewidth=linewidth)
         end
         current()
     end

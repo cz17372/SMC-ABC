@@ -1,5 +1,4 @@
 module ExactBPS
-
 using LinearAlgebra, Distributions
 using ForwardDiff: gradient
 using ProgressMeter
@@ -7,7 +6,6 @@ using Plots, StatsPlots
 theme(:vibrant)
 using Random
 using Roots
-
 f(z;θ) = θ[1] + θ[2]*(1+0.8*(1-exp(-θ[3]*z))/(1+exp(-θ[3]*z)))*(1+z^2)^θ[4]*z;
 # Defines the boundary for constrained region, parameterized by ϵ
 Dist1(x;y) = norm(sort(f.(x[5:end],θ=x[1:4])) .- sort(y))
@@ -16,9 +14,7 @@ C(x;y,ϵ,Dist)  = Dist(x,y=y) - ϵ
 object(k;x0,u0,C) = prod((x0 .+ k*u0)[1:4])*prod((x0 .+ k*u0)[1:4] .- 10.0)*C(x0 .+  k*u0)
 prior_boundary(x0) = any([(abs.(x0[1:4]) .< 1e-15);(abs.(x0[1:4] .- 10.0) .< 1e-15)])
 get_prior_normal(x0) = normalize([(abs.(x0[1:4]) .< 1e-15) .+ (abs.(x0[1:4] .- 10.0) .< 1e-15);zeros(length(x0[5:end]))])
-
 U(x) = sum(logpdf.(Uniform(0,10),x[1:4])) + sum(logpdf.(Normal(0,1),x[5:end]))
-
 function φ1(x0,u0,δ;C)
     output = x0
     working_delta = δ
@@ -45,9 +41,7 @@ function φ1(x0,u0,δ;C)
     output = hcat(output,intermediate_x .+ working_delta * intermediate_u)
     return output[:,end], -intermediate_u, No_Bounces
 end
-
 σ(x0,u0) = (x0,-u0)
-
 function α1(x1,x0)
     return min(0,U(x1) - U(x0))
 end
@@ -56,7 +50,6 @@ function α2(x2,x1,x0)
     backward_rejection = log(1 - exp(α1(x1,x2)))
     return min(0,backward_rejection+U(x2)-forward_rejection-U(x0))
 end
-
 function DirectionRefresh(u0,δ,κ)
     p = exp(-κ*δ)
     ind = rand(Bernoulli(p))
@@ -66,7 +59,6 @@ function DirectionRefresh(u0,δ,κ)
         return normalize(rand(Normal(0,1),length(u0)))
     end
 end
-
 function BPS(N::Int64,x0::Vector{Float64},δ::Float64,κ::Float64;y::Vector{Float64},ϵ::Float64,Dist)
     C0(x) = C(x,y=y,ϵ=ϵ,Dist=Dist)
     X = zeros(N+1,length(x0))
@@ -141,9 +133,7 @@ function BPS1(N::Int64,x0::Vector{Float64},δ::Float64,κ::Float64;y::Vector{Flo
     end
     return X[end,:], AcceptedNumber, Bounces/Ind
 end
-
-
-function SMC(N::Int64,T::Int64,y::Vector{Float64};Threshold::Float64,δ::Float64,κ::Float64,K0::Int64,MH,Dist)
+function SMC(N::Int64,T::Int64,y::Vector{Float64};Threshold::Float64,δ::Float64,κ::Float64,K0::Int64,MH=BPS1,Dist=Dist2,MaxBounces = 2.0, MinStepsize=0.1)
     NoData = length(y)
     U = zeros(4+NoData,N,T+1)
     EPSILON = zeros(T+1)
@@ -183,7 +173,7 @@ function SMC(N::Int64,T::Int64,y::Vector{Float64};Threshold::Float64,δ::Float64
         AveBounceNo[t]   = mean(BounceNoVec[index])
         println("Average Number of Bounces per proposal = ",AveBounceNo[t])
         println("Average Acceptance Probability is ", MH_AcceptProb[t])
-        if AveBounceNo[t] >= 2.0
+        if (AveBounceNo[t] >= MaxBounces) & (δ >= MinStepsize)
             δ = 0.95*δ
         end
         if MH_AcceptProb[t] >= 1.0
