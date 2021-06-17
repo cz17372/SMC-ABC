@@ -33,7 +33,7 @@ println("Refreshing Rate:")
 
 println("Maximum number of bounces proposed outside the boundary:")
 MaxBounce = readline()
-MaxBounce = parse(Int64,MaxBounce)
+MaxBounce = parse(Float64,MaxBounce)
 
 println("Minimum Step Size:")
 MinStepSize = readline()
