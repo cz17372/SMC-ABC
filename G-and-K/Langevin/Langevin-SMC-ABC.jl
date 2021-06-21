@@ -35,7 +35,7 @@ function LSMCABC_LocalMH(N,ξ0,ϵ;Σ,σ,y)
     return ξ[end,:],AcceptedNum
 end
 
-function Langevin_SMC_ABC(N,T,y;Threshold,σ,K0)
+function SMC(N,T,y;Threshold,σ,K0,MinAcceptProb,MinStepsize)
     NoData = length(y)
     XI = zeros(4+NoData,N,T+1)
     EPSILON = zeros(T+1)
@@ -74,6 +74,10 @@ function Langevin_SMC_ABC(N,T,y;Threshold,σ,K0)
         MH_AcceptProb[t] = mean(ParticleAcceptProb[index])/K[t]
         K[t+1] = Int64(ceil(log(0.01)/log(1-MH_AcceptProb[t])))
         println("Average Acceptance Probability is ", MH_AcceptProb[t])
+        if (MH_AcceptProb[t]<MinAcceptProb) & (σ>MinStepsize)
+            σ = exp(log(σ) + 0.3*(MH_AcceptProb[t] - MinAcceptProb))
+        end
+        println("The step size used in the next SMC iteration is ",σ)
         print("\n\n")
     end
     return (XI=XI,DISTANCE=DISTANCE,WEIGHT=WEIGHT,EPSILON=EPSILON,ANCESTOR=ANCESTOR,AcceptanceProb=MH_AcceptProb,K=K)

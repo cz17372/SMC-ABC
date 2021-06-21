@@ -7,7 +7,7 @@ dat20 = f.(z0,θ=θ0)
 cd("G-and-K"); 
 include("utils.jl"); include("MCMC/MCMC.jl")
 
-MCMC, α = RWM(1000000,Σ,0.2,y=dat20)
+MCMC, α = RWM(1000000,1.0*I,0.2,y=dat20)
 Σ = cov(MCMC)
 plot(MCMC[:,1])
 density(MCMC[500001:end,4])
@@ -88,3 +88,11 @@ savefig("20data-gandk-NoMCMCSteps.pdf")
 include("BPS/ExactBPS-SMC-ABC.jl")
 
 R = ExactBPS.SMC(1000,250,dat20,Threshold=0.8,δ=0.3,κ=3.0,K0=2,MaxBounces=2.0,MinStepsize=0.1)
+
+
+@load "data/20data_BPS_5000Particles_Adaptive.jld2"
+
+n = 4; xlim=(0.0,2.0)
+plotposterior(Results,n,xlim=xlim)
+
+@load "data/try.jld2"
