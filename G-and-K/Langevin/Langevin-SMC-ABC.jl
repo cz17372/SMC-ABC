@@ -9,13 +9,14 @@ Dist(ξ;y) = norm(f.(ξ[5:end],θ=ξ[1:4]) .- y)
 logPrior(ξ) = sum(logpdf.(Uniform(0,10),ξ[1:4])) + sum(logpdf.(Normal(0,1),ξ[5:end]))
 
 function LSMCABC_LocalMH(N,ξ0,ϵ;Σ,σ,y) 
+    C(x) = Dist(x,y=y)
     ξ = zeros(N,length(ξ0))
     ξ[1,:] = ξ0
     AcceptedNum = 0
     for n = 2:N
-        μ = ξ[n-1,:] .- σ^2/2*Σ*normalize(gradient(x->Dist(x,y=y),ξ[n-1,:]))
+        μ = ξ[n-1,:] .- σ^2/2*Diagonal(Σ)*normalize(gradient(C,ξ[n-1,:]))
         newξ = rand(MultivariateNormal(μ,σ^2*Σ))
-        reverseμ = newξ .- σ^2/2 * Σ * normalize(gradient(x-> Dist(x,y=y),ξ[n-1,:]))
+        reverseμ = newξ .- σ^2/2 *Diagonal(Σ)* normalize(gradient(C,newξ))
         forward_proposal_density = logpdf(MultivariateNormal(μ,σ^2*Σ),newξ)
         backward_proposal_density = logpdf(MultivariateNormal(reverseμ,σ^2*Σ),ξ[n-1,:])
         log_proposal_ratio = backward_proposal_density-forward_proposal_density
@@ -64,7 +65,6 @@ function SMC(N,T,y;Threshold,σ,K0,MinAcceptProb,MinStepsize)
         println("epsilon = ", round(EPSILON[t+1],sigdigits=5), " No. Unique Starting Point: ", length(unique(DISTANCE[ANCESTOR[:,t],t])))
         println("K = ", K[t])
         Σ = cov(XI[:,findall(WEIGHT[:,t].>0),t],dims=2) + 1e-8*I
-        # L = cholesky(Σ).L
         index = findall(WEIGHT[:,t+1] .> 0.0)
         println("Performing local Metropolis-Hastings...")
         @time Threads.@threads for i = 1:length(index)
