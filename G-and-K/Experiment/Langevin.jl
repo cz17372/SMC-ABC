@@ -61,3 +61,4 @@ Results = (Information=Information, EPSILON=EPSILON,K=K,alpha=α,Theta=Theta)
 println("The name for the result file:")
 name = readline()
 @save name Results
+R = RandomWalk.SMC(1000,250,dat20,Threshold=0.8,δ=0.3,K0=5,MinAcceptProbability=0.25,MinStepSize=0.1)

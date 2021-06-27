@@ -100,3 +100,13 @@ n = 3; xlim=(0.0,11.0)
 plotposterior(Results,n,xlim=xlim)
 
 @load "Experiment/try.jl2"
+
+cd("G-and-K")
+R = RandomWalk.SMC(1000,250,dat20,Threshold=0.8,δ=0.3,K0=5,MinAcceptProbability=0.25,MinStepSize=0.1)
+
+x0 = R.U[:,1,end]
+
+index = findall(R.WEIGHT[:,end] .> 0)
+U = R.U[:,index,end]
+
+Euclidean(x0,y=dat20)
