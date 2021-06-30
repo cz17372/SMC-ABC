@@ -90,7 +90,7 @@ include("BPS/ExactBPS-SMC-ABC.jl")
 R = ExactBPS.SMC(1000,250,dat20,Threshold=0.8,δ=0.3,κ=3.0,K0=2,MaxBounces=2.0,MinStepsize=0.1)
 
 
-@load "data/20data_Langevin_2000Particles_Adaptive.jld2"
+@load "data/20data_Langevin_5000Particles_Adaptive.jld2"
 
 n = 3; xlim=(0.0,11.0)
 plotposterior(Results,n,xlim=xlim)
@@ -110,3 +110,5 @@ index = findall(R.WEIGHT[:,end] .> 0)
 U = R.U[:,index,end]
 
 Euclidean(x0,y=dat20)
+
+Results.Information

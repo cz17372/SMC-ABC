@@ -1,86 +1,205 @@
-using Plots
-using Random, Distributions, JLD2, LinearAlgebra
-using Plots,StatsPlots
-# Transformation of standard normal RV's to g-and-k
+using LinearAlgebra
+using Distributions, Random, ProgressMeter, LinearAlgebra, Plots, StatsPlots
+
 f(z;θ) = θ[1] + θ[2]*(1+0.8*(1-exp(-θ[3]*z))/(1+exp(-θ[3]*z)))*(1+z^2)^θ[4]*z;
-# Set the true static parameters
-θ0 = [3.0,1.0,2.0,0.5];
-# Generate Artificial Data Sets 
+Euclidean(x;y) = norm(x .- y)
+function Simulate(N;θ,d)
+    Output = zeros(N,d)
+    for n = 1:N
+        Output[n,:] = f.(rand(Normal(0,1),d),θ=θ)
+    end
+    return Output
+end
+
+function SimulateOne(θ,d)
+    return f.(rand(Normal(0,1),d),θ=θ)
+end
+
+function ABC_pseudoMCMC(N,θ0,x0;y,ϵ,δ,Σ)
+    C(x) = Euclidean(x,y=y)
+    M,d = size(x0)
+    Output = zeros(N+1,length(θ0))
+    Output[1,:] = θ0
+    oldx = x0;
+    Ind = 0
+    @showprogress 1 "Computing..." for n = 2:(N+1)
+        newθ = rand(MultivariateNormal(Output[n-1,:],δ^2*Σ))
+        newx = Simulate(M,θ=newθ,d=d)
+        if any(newθ .< 0.0) | any(newθ .> 10.0)
+            Output[n,:] = Output[n-1,:]
+        else
+            oldkernel = sum(mapslices(C,oldx,dims=2)[:,1] .< ϵ)
+            newkernel = sum(mapslices(C,newx,dims=2)[:,1] .< ϵ)
+            if rand(Uniform(0,1)) < newkernel/oldkernel
+                oldx = newx
+                Output[n,:] = newθ
+                Ind += 1
+            else
+                Output[n,:] = Output[n-1,:]
+            end
+        end
+    end
+    return (θ = Output, X = oldx, Prob = Ind/N)
+end
+
+function ABC_MCMC(N,θ0,x0;y,ϵ,δ,Σ)
+    d = length(x0)
+    Output = zeros(N+1,length(θ0))
+    Output[1,:] = θ0
+    oldx = x0;
+    Ind = 0
+    for n = 2:(N+1)
+        newθ = rand(MultivariateNormal(Output[n-1,:],δ^2*Σ))
+        if any(newθ .< 0.0) | any(newθ .> 10.0)
+            Output[n,:] = Output[n-1,:]
+        else
+            newx = SimulateOne(newθ,d)
+            if norm(newx .- y) < ϵ
+                oldx = newx
+                Output[n,:] = newθ
+                Ind += 1
+            else
+                Output[n,:] = Output[n-1,:]
+            end
+        end
+    end
+    return (Output[end,:], oldx, Ind)
+end
+using Random
 Random.seed!(123);
-dat20 = f.(rand(Normal(0,1),20),θ=θ0);
-include("Langevin/Langevin-SMC-ABC.jl")
-include("BPS/BPS-SMC-ABC.jl")
-include("RandomWalk/RW-SMC-ABC.jl")
-
-include("MCMC/MCMC.jl")
-R,α = RWM(500000,Σ,0.2,y=dat20)
-Σ = cov(R[50001:end,:])
-@load "20data_RW_Results.jld2" Results
-
-U = Results.Theta
-
-density(U[1][4,:],label="",linewidth=0.5,color=:grey)
-for n = 2:30
-    density!(U[n][4,:],label="",linewidth=0.5,color=:grey)
+z0 = rand(Normal(0,1),20);
+θ0 = [3.0,1.0,2.0,0.5];
+dat20 = f.(z0,θ=θ0);
+C(x) = Euclidean(x,y=dat20)
+θ0 = rand(Uniform(0,10),4)
+x0 = SimulateOne(θ0,20)
+while C(x0) > 5.0
+    θ0 = rand(Uniform(0,10),4)
+    x0 = SimulateOne(θ0,20)
 end
-current()
 
-plot(log.(Results.EPSILON[1]),label="")
-for n = 2:30
-    plot!(log.(Results.EPSILON[n]),label="")
+
+function SMC(N,T,y;Threshold,δ,K0,MinProb,MinStep)
+    NoData = length(y)
+    U = zeros(4,N,T+1)
+    EPSILON = zeros(T+1)
+    DISTANCE = zeros(N,T+1)
+    WEIGHT = zeros(N,T+1)
+    ANCESTOR = zeros(Int,N,T)
+    K = zeros(Int64,T+1)
+    X = zeros(NoData,N,T+1)
+    K[1] = K0
+    for i = 1:N
+        U[:,i,1] = rand(Uniform(0,10),4)
+        X[:,i,1] = SimulateOne(U[:,i,1],NoData)
+        DISTANCE[i,1] = norm(X[:,i,1] .- y)
+    end
+    WEIGHT[:,1] .= 1/N
+    EPSILON[1] = findmax(DISTANCE[:,1])[1]
+    ParticleAcceptProb = zeros(N)
+    MH_AcceptProb = zeros(T)
+    for t = 1:T
+        ANCESTOR[:,t] = vcat(fill.(1:N,rand(Multinomial(N,WEIGHT[:,t])))...);
+        if length(unique(DISTANCE[ANCESTOR[:,t],t])) > Int(floor(0.4*N))
+            EPSILON[t+1] = quantile(unique(DISTANCE[ANCESTOR[:,t],t]),Threshold)
+        else
+            EPSILON[t+1],_ = findmax(unique(DISTANCE[ANCESTOR[:,t],t]))
+        end
+        WEIGHT[:,t+1] = (DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1])/sum(DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1])
+        println("SMC Step: ", t)
+        println("epsilon = ", round(EPSILON[t+1],sigdigits=5), " No. Unique Starting Point: ", length(unique(DISTANCE[ANCESTOR[:,t],t])))
+        println("K = ", K[t])
+        Σ = cov(U[:,findall(WEIGHT[:,t].>0),t],dims=2) + 1e-8*I
+        index = findall(WEIGHT[:,t+1] .> 0.0)
+        println("Performing local Metropolis-Hastings...")
+        @time Threads.@threads for i = 1:length(index)
+            U[:,index[i],t+1],X[:,index[i],t+1],ParticleAcceptProb[index[i]] = ABC_MCMC(K[t],U[:,ANCESTOR[index[i],t],t],X[:,ANCESTOR[index[i],t],t],y=y,ϵ=EPSILON[t+1],δ=δ,Σ=Σ)
+            GC.safepoint()
+            DISTANCE[index[i],t+1] = norm(X[:,index[i],t+1] .- y)
+        end
+        MH_AcceptProb[t] = mean(ParticleAcceptProb[index])/K[t]
+        K[t+1] = Int64(ceil(log(0.01)/log(1-MH_AcceptProb[t])))
+        if (MH_AcceptProb[t] < MinProb) & (δ > MinStep)
+            δ = exp(log(δ) + 0.3*(MH_AcceptProb[t] - MinProb))
+        end
+        println("Average Acceptance Probability is ", MH_AcceptProb[t])
+        println("The step size used in the next SMC iteration is ",δ)
+        print("\n\n")
+    end
+    return (U=U,X=X,DISTANCE=DISTANCE,WEIGHT=WEIGHT,EPSILON=EPSILON,ANCESTOR=ANCESTOR,AcceptanceProb=MH_AcceptProb,K=K)
 end
-current()
-plot(Results.K[1],label="")
-for n = 2:30
-    plot!(Results.K[n],label="")
+
+R = SMC(1000,50,dat20,Threshold=0.8,δ=0.3,K0=5,MinProb=0.25,MinStep=0.05)
+
+index = findall(R.WEIGHT[:,end] .> 0)
+X = R.U[:,index,end]
+density(X[1,:])
+
+
+function SMC2(N,y;Threshold,δ,K0,MinProb,MinStep,StopProb,ϵT=0.5,Scheme="Adaptive")
+    NoData = length(y)
+    U = Array{Array{Float64,2},1}(undef,0)
+    push!(U,zeros(4,N))
+    EPSILON = zeros(1)
+    DISTANCE = zeros(N,1)
+    WEIGHT = zeros(N,1)
+    ANCESTOR = zeros(Int,N,0)
+    K = zeros(Int64,1); K[1] = K0
+    X = Array{Array{Float64,2},1}(undef,0)
+    push!(X,zeros(NoData,N))
+    for i = 1:N
+        U[1][:,i] = rand(Uniform(0,10),4)
+        X[1][:,i] = SimulateOne(U[1][:,i],NoData)
+        DISTANCE[i,1] = norm(X[1][:,i] .- y)
+    end
+    WEIGHT[:,1] .= 1.0/N
+    EPSILON[1] = findmax(DISTANCE[:,1])[1]
+    ParticleAcceptProb = zeros(N)
+    MH_AcceptProb = zeros(1); MH_AcceptProb[end] = 1.0
+    t = 0
+    while (MH_AcceptProb[end] > StopProb) & (EPSILON[end]>=ϵT)
+        t += 1
+        ANCESTOR = hcat(ANCESTOR,vcat(fill.(1:N,rand(Multinomial(N,WEIGHT[:,t])))...));
+        if length(unique(DISTANCE[ANCESTOR[:,t],t])) > Int(floor(0.4*N))
+            push!(EPSILON,quantile(unique(DISTANCE[ANCESTOR[:,t],t]),Threshold))
+        else
+            push!(EPSILON, findmax(unique(DISTANCE[ANCESTOR[:,t],t]))[1])
+        end
+        WEIGHT = hcat(WEIGHT,(DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1])/sum(DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1]))
+        println("SMC Step: ", t)
+        println("epsilon = ", round(EPSILON[t+1],sigdigits=5), " No. Unique Starting Point: ", length(unique(DISTANCE[ANCESTOR[:,t],t])))
+        println("K = ", K[t])
+        Σ = cov(U[t][:,findall(WEIGHT[:,t].>0)],dims=2) + 1e-8*I
+        index = findall(WEIGHT[:,t+1] .> 0.0)
+        index = findall(WEIGHT[:,t+1] .> 0.0)
+        println("Performing local Metropolis-Hastings...")
+        push!(U,zeros(4,N)); push!(X,zeros(NoData,N)); 
+        DISTANCE = hcat(DISTANCE,zeros(N));
+        @timed Threads.@threads for i = 1:length(index)
+            U[t+1][:,index[i]],X[t+1][:,index[i]],ParticleAcceptProb[index[i]] = ABC_MCMC(K[t],U[t][:,ANCESTOR[index[i],t]],X[t][:,ANCESTOR[index[i],t]],y=y,ϵ=EPSILON[t+1],δ=δ,Σ=Σ)
+            GC.safepoint()
+            DISTANCE[index[i],t+1] = norm(X[t+1][:,index[i]] .- y)
+        end
+        push!(MH_AcceptProb,mean(ParticleAcceptProb[index])/K[end])
+        if Scheme=="Adaptive"
+            push!(K,Int64(ceil(log(0.01)/log(1-MH_AcceptProb[end]))))
+        elseif Scheme == "Fixed"
+            push!(K,K0)
+        end
+        if (MH_AcceptProb[end] < MinProb) & (δ > MinStep)
+            δ = exp(log(δ) + 0.5*(MH_AcceptProb[end] - MinProb))
+        end
+        println("Average Acceptance Probability is ", MH_AcceptProb[t])
+        println("The step size used in the next SMC iteration is ",δ)
+        print("\n\n")
+    end
+    return (U=U,X=X,DISTANCE=DISTANCE,WEIGHT=WEIGHT,EPSILON=EPSILON,ANCESTOR=ANCESTOR,AcceptanceProb=MH_AcceptProb,K=K)
 end
-current()
 
-@load "20data_RW_2000Particles.jld2" Results
-U = Results.Theta
 
-t = 3
-density(U[1][t,:],label="",linewidth=0.2,color=:grey)
-for n = 2:30
-    density!(U[n][t,:],label="",linewidth=0.2,color=:grey)
-end
-current()
-density!(R[400001:end,t],color=:red,label="",linewidth=2)
+R = SMC2(5000,dat20,Threshold=0.99,δ = 0.1, K0 = 20, MinProb = 0.1, MinStep = 0.1, StopProb = 0.01,Scheme="Fixed")
+plot!(log.(R.EPSILON),label="")
 
-plot(R[:,2])
-density(R[400001:end,1])
-
-@load "100data_RW_1000Particles.jld2" 
-U = Results.Theta
-plot(log.(Results.alpha[1]),label="")
-for n = 2:30
-    plot!(log.(Results.alpha[n]),label="")
-end
-current()
-
-density!(R[400001:end,t],color=:red,label="",linewidth=2)
-
-plot(Results.K[1],label="")
-for n = 2:30
-    plot!(Results.K[n],label="")
-end
-current()
-
-@load "100data_RW_1000Particles.jld2" 
-U = Results.Theta
-t = 2
-density(U[1][t,:],label="",linewidth=0.2,color=:grey)
-for n = 2:30
-    density!(U[n][t,:],label="",linewidth=0.2,color=:grey)
-end
-current()
-@load "test.jld2" 
-U = Results.Theta
-density!(U[1][4,:])
-
-plot(log.(Results.alpha[1]))
-
-@load "Experiment/try.jld2"
-U = Results.Theta
-
-density(U[1][4,:])
+indices = findall(R.WEIGHT[:,end] .> 0)
+X = R.U[end][:,indices]
+density(X[4,:])
