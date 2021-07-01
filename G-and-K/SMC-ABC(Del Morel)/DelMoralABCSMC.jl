@@ -109,18 +109,19 @@ function SMC(N,y;InitStep,MinStep,MinProb,IterScheme,InitIter,PropParMoved,TolSc
     # Set the first acceptance probability to be 1 to make the while loop work
     AcceptanceProb[1] = 1.0;
     StepSize = zeros(1); StepSize[1] = InitStep
-
-
+    UniqueParticles = zeros(0)
+    UniqueStartingPoints = zeros(0)
+    ESS = zeros(0)
     ### Simulate the initial parameters & pseudo observations from prior ###
     for i = 1:N
         U[1][:,i] = rand(Uniform(0,10),4)
         X[1][:,i] = SimulateOne(U[1][:,i],L)
         DISTANCE[i,1] = norm(X[1][:,i] .- y)
     end
-
+    push!(UniqueParticles,length(unique(DISTANCE[:,1])))
     WEIGHT[:,1] .= 1.0/N; t = 0;
+    push!(ESS,1/sum(WEIGHT[:,end].^2))
     EPSILON[1] = findmax(DISTANCE[:,1])[1]
-
     timevec = zeros(0)
     ### ABC-SMC Part ### 
     while (AcceptanceProb[end] > TerminalProb) & (EPSILON[end] > TerminalTol)
@@ -136,7 +137,9 @@ function SMC(N,y;InitStep,MinStep,MinProb,IterScheme,InitIter,PropParMoved,TolSc
         end
         ### Calculate the weight for the next iteration
         WEIGHT = hcat(WEIGHT,(DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1])/sum(DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1]))
+        push!(ESS,1/sum(WEIGHT[:,end].^2))
         println("SMC Step: ", t)
+        push!(UniqueStartingPoints,length(unique(DISTANCE[ANCESTOR[:,t],t])))
         println("epsilon = ", round(EPSILON[t+1],sigdigits=5), " No. Unique Starting Point: ", length(unique(DISTANCE[ANCESTOR[:,t],t])))
         println("K = ", K[t])
         Σ = cov(U[t][:,findall(WEIGHT[:,t].>0)],dims=2) + 1e-8*I
@@ -150,6 +153,7 @@ function SMC(N,y;InitStep,MinStep,MinProb,IterScheme,InitIter,PropParMoved,TolSc
             GC.safepoint()
             DISTANCE[index[i],t+1] = norm(X[t+1][:,index[i]] .- y)
         end
+        push!(UniqueParticles,length(unique(DISTANCE[findall(WEIGHT[:,t+1].>0),t+1])))
         push!(timevec,v.time-v.gctime)
         ### Estimate the acceptance probability for the ABC_MCMC algorithm
         push!(AcceptanceProb,mean(IndividualAcceptedNum[index])/K[end])
@@ -168,7 +172,7 @@ function SMC(N,y;InitStep,MinStep,MinProb,IterScheme,InitIter,PropParMoved,TolSc
         println("The step size used in the next SMC iteration is ",StepSize[end])
         print("\n\n")
     end
-    return (U=U,X=X,EPSILON=EPSILON,DISTANCE=DISTANCE,WEIGHT=WEIGHT,ANCESTOR=ANCESTOR,AcceptanceProb=AcceptanceProb,K=K[1:end-1],StepSize=StepSize[1:end-1],time=timevec)
+    return (U=U,X=X,EPSILON=EPSILON,DISTANCE=DISTANCE,WEIGHT=WEIGHT,ANCESTOR=ANCESTOR,AcceptanceProb=AcceptanceProb,K=K[1:end-1],StepSize=StepSize[1:end-1],time=timevec,ESS=ESS,UniqueParticles=UniqueParticles,UniqueStartingPoints=UniqueStartingPoints)
 end
 end
 
