@@ -36,9 +36,9 @@ if choice == 1
     println("1. Fixed No. of MCMC steps     2. Adaptive Number of MCMC steps")
     IterSchemeChoice = readline();
     if IterSchemeChoice == "1"
-        IterShcheme = "Fixed"
+        IterScheme = "Fixed"
     elseif IterSchemeChoice == "2"
-        IterShcheme = "Adaptive"
+        IterScheme = "Adaptive"
     end
     println("Choose the initial no. of MCMC steps:")
     InitIter = readline(); InitIter = parse(Int64,InitIter);
@@ -76,7 +76,7 @@ if choice == 1
     UniqueStartingPoints = Array{Any,1}(undef,m)
     UniqueParticles     = Array{Any,1}(undef,m)
     for i = 1:m
-        R = DelMoralSMCABC.SMC(N,ystar,InitStep=InitStep,MinStep=MinStep,MinProb=MinProb,IterScheme=IterShcheme,InitIter=InitIter,PropParMoved=PropParMoved,TolScheme=TolScheme,η=η,TerminalTol=TerminalTol,TerminalProb=TerminalProb)
+        R = DelMoralSMCABC.SMC(N,ystar,InitStep=InitStep,MinStep=MinStep,MinProb=MinProb,IterScheme=IterScheme,InitIter=InitIter,PropParMoved=PropParMoved,TolScheme=TolScheme,η=η,TerminalTol=TerminalTol,TerminalProb=TerminalProb)
         EPSILON[i] = R.EPSILON
         K[i]       = R.K 
         AcceptanceProb[i]       = R.AcceptanceProb
@@ -88,7 +88,8 @@ if choice == 1
         UniqueParticles[i] = R.UniqueParticles
         UniqueStartingPoints[i] = R.UniqueStartingPoints
     end
-    Results = (EPSILON=EPSILON,K=K,AcceptanceProb=AcceptanceProb,U=U,Time=Time,ESS=ESS,StepSize=StepSize,UniqueParticles=UniqueParticles,UniqueStartingPoints=UniqueStartingPoints)
+    Information = (seed = seed, L=L, Method="Standard ABC-SMC",N=N,InitStep=InitStep,MinStep=MinStep,MinProb=MinProb,IterScheme = IterScheme,InitIter=InitIter,PropParMoved=PropParMoved,TolScheme=TolScheme,η=η,TerminalTol=TerminalTol,TerminalProb=TerminalProb)
+    Results = (Information=Information, EPSILON=EPSILON,K=K,AcceptanceProb=AcceptanceProb,U=U,Time=Time,ESS=ESS,StepSize=StepSize,UniqueParticles=UniqueParticles,UniqueStartingPoints=UniqueStartingPoints)
     println("The name for the result file:")
     name = readline()
     @save name Results
@@ -107,9 +108,9 @@ elseif choice == "2"
     println("1. Fixed No. of MCMC steps     2. Adaptive Number of MCMC steps")
     IterSchemeChoice = readline();
     if IterSchemeChoice == "1"
-        IterShcheme = "Fixed"
+        IterScheme = "Fixed"
     elseif IterSchemeChoice == "2"
-        IterShcheme = "Adaptive"
+        IterScheme = "Adaptive"
     end
     println("Choose the initial no. of MCMC steps:")
     InitIter = readline(); InitIter = parse(Int64,InitIter);
@@ -143,7 +144,7 @@ elseif choice == "2"
     UniqueStartingPoints = Array{Any,1}(undef,m)
     UniqueParticles     = Array{Any,1}(undef,m)
     for i = 1:m
-        R = RWSMCABC.SMC(N,ystar,InitStep=InitStep,MinStep=MinStep,MinProb=MinProb,IterScheme=IterShcheme,InitIter=InitIter,PropParMoved=PropParMoved,TolScheme=TolScheme,η=η,TerminalTol=TerminalTol,TerminalProb=TerminalProb)
+        R = RWSMCABC.SMC(N,ystar,InitStep=InitStep,MinStep=MinStep,MinProb=MinProb,IterScheme=IterShheme,InitIter=InitIter,PropParMoved=PropParMoved,TolScheme=TolScheme,η=η,TerminalTol=TerminalTol,TerminalProb=TerminalProb)
         EPSILON[i] = R.EPSILON
         K[i]       = R.K 
         AcceptanceProb[i]       = R.AcceptanceProb
@@ -155,7 +156,8 @@ elseif choice == "2"
         UniqueParticles[i] = R.UniqueParticles
         UniqueStartingPoints[i] = R.UniqueStartingPoints
     end
-    Results = (EPSILON=EPSILON,K=K,AcceptanceProb=AcceptanceProb,U=U,Time=Time,ESS=ESS,StepSize=StepSize,UniqueParticles=UniqueParticles,UniqueStartingPoints=UniqueStartingPoints)
+    Information = (seed = seed, L=L, Method="RW ABC-SMC",N=N,InitStep=InitStep,MinStep=MinStep,MinProb=MinProb,IterScheme = IterScheme,InitIter=InitIter,PropParMoved=PropParMoved,TolScheme=TolScheme,η=η,TerminalTol=TerminalTol,TerminalProb=TerminalProb)
+    Results = (Information=Information,EPSILON=EPSILON,K=K,AcceptanceProb=AcceptanceProb,U=U,Time=Time,ESS=ESS,StepSize=StepSize,UniqueParticles=UniqueParticles,UniqueStartingPoints=UniqueStartingPoints)
     println("The name for the result file:")
     name = readline()
     @save name Results
