@@ -1,55 +1,18 @@
-function plotposterior(Data,var;title="",label="",xlabel="",ylabel="",xlim=(0,1),color=:grey,linewidth=0.2,new=true,size=(600,600))
-    U = Data.Theta
-    no_replica = length(U)
-    if new
-        density(U[1][var,:],title=title,label=label,xlabel=xlabel,ylabel=ylabel,color=color,linewidth=linewidth,size=size,xlim=xlim)
-        for m = 2:no_replica
-            density!(U[m][var,:],label=label,color=color,linewidth=linewidth)
-        end
-        current()
-    else
-        density!(U[1][var,:],title=title,label=label,xlabel=xlabel,ylabel=ylabel,color=color,linewidth=linewidth,size=size,xlim=xlim)
-        for m = 2:no_replica
-            density!(U[m][var,:],label=label,color=color,linewidth=linewidth)
-        end
-        current()
+module utils
+
+using Plots, StatsPlots
+theme(:wong2)
+
+
+function plotinfo(R)
+    Keys = keys(R.Information)
+
+    for k in Keys
+        println(k,"::",R.Information[k])
     end
 end
 
 
-function plotK(Data;title="",label="",xlabel="",ylabel="",color=:grey,linewidth=0.2,new=true,size=(600,600))
-    U = Data.K
-    no_replica = length(U)
-    if new
-        plot(log.(U[1]),title=title,label=label,xlabel=xlabel,ylabel=ylabel,color=color,linewitdh=linewidth,size=size)
-        for m = 2:no_replica
-            plot!(log.(U[m]),label="",xlabel=xlabel,ylabel=ylabel,color=color,linewidth=linewidth)
-        end
-        current()
-    else
-        plot!(log.(U[1]),title=title,label=label,xlabel=xlabel,ylabel=ylabel,color=color,linewitdh=linewidth,size=size)
-        for m = 2:no_replica
-            plot!(log.(U[m]),label="",xlabel=xlabel,ylabel=ylabel,color=color,linewidth=linewidth)
-        end
-        current()
-    end
-end
 
 
-function plotepsilon(Data;title="",label="",xlabel="",ylabel="",color=:grey,linewidth=0.2,new=true,size=(600,600))
-    U = Data.EPSILON
-    no_replica = length(U)
-    if new
-        plot(log.(U[1]),title=title,label=label,xlabel=xlabel,ylabel=ylabel,color=color,linewitdh=linewidth,size=size)
-        for m = 2:no_replica
-            plot!(log.(U[m]),label="",xlabel=xlabel,ylabel=ylabel,color=color,linewidth=linewidth)
-        end
-        current()
-    else
-        plot!(log.(U[1]),title=title,label=label,xlabel=xlabel,ylabel=ylabel,color=color,linewitdh=linewidth,size=size)
-        for m = 2:no_replica
-            plot!(log.(U[m]),label="",xlabel=xlabel,ylabel=ylabel,color=color,linewidth=linewidth)
-        end
-        current()
-    end
 end
