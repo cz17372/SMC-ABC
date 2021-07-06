@@ -165,7 +165,7 @@ ustar = rand(Normal(0,1),100)
 ystar = ϕ(ustar,θ=θstar)
 
 
-R = SMC(1000,ystar,InitStep=0.3,MinStep=0.1,MinProb=0.1,IterScheme="Adaptive",InitIter=100,PropParMoved=0.99,TolScheme="unique",η=0.99,TerminalTol=10,TerminalProb=0.01)
+R = SMC(1000,ystar,InitStep=0.3,MinStep=0.1,MinProb=0.1,IterScheme="Adaptive",InitIter=100,PropParMoved=0.99,TolScheme="unique",η=0.9,TerminalTol=10,TerminalProb=0.01)
 Index = findall(R.WEIGHT[:,end] .> 0)
 X = R.U[end][:,Index]
 
@@ -175,9 +175,16 @@ density(X[2,:]); vline!([log(0.005)])
 density(X[3,:]);vline!([log(0.05)])
 density(X[4,:]);vline!([log(0.001)])
 
-plot(ystar,color=:red,linewidth=2.0)
-for i = 1:length(Index)
-    plot!(R.X[end][:,Index[i]],label="",linewidth=0.1,color=:grey)
+plot(R.X[end][1:50,Index[1]],label="",linewidth=0.02,color=:grey);
+for i = 2:length(Index)
+    plot!(R.X[end][1:50,Index[i]],label="",linewidth=0.02,color=:grey);
 end
-current()
+plot!(ystar[1:50],color=:red,linewidth=3.0,label="");
 
+plot!(R.X[end][51:100,Index[1]],label="",linewidth=0.02,color=:grey);
+for i = 2:length(Index)
+    plot!(R.X[end][51:100,Index[i]],label="",linewidth=0.02,color=:grey);
+end
+plot!(ystar[51:100],color=:green,linewidth=3.0,label="")
+
+plot(R.K)
