@@ -1,9 +1,10 @@
-using Distributions, Plots
-using ForwardDiff
+using Plots: Random
+using Distributions, Plots, StatsPlots
 using Random
 using LinearAlgebra
-using Flux
-using LinearAlgebra
+cd("LV")
+include("DelMoralABCSMC.jl")
+include("RandomWalk.jl")
 function ϕ(u;θ)
     θ = exp.(θ)
     N = length(u) ÷ 2
@@ -21,170 +22,78 @@ function SimulateOne(θ,N)
     u = rand(Normal(0,1),2*N)
     return ϕ(u,θ=θ)
 end
-function D(θ,u;y)
-    return norm(ϕ(u,θ=θ) .- y)
-end
-function U(θ)
-    return sum(logpdf.(Normal(-2.0,3.0),θ))
-end
-function ABC_MCMC(N,θ0,x0;y,ϵ,δ,Σ)
-    d = length(x0) ÷ 2
-    oldθ = θ0
-    oldx = x0;
-    Ind = 0
-    for n = 2:(N+1)
-        newθ = rand(MultivariateNormal(oldθ,δ^2*Σ))
-        if log(rand(Uniform(0,1))) < U(newθ) - U(oldθ)
-            newx = SimulateOne(newθ,d)
-            if norm(newx .- y) < ϵ
-                oldx = newx
-                oldθ = newθ
-                Ind += 1
-            end
-        end
-    end
-    return (oldθ, oldx, Ind)
-end
-
-function ABC_MCMC2(N,θ0,x0;y,ϵ,δ,Σ)
-    d = length(x0) ÷ 2
-    Output = zeros(N+1,length(θ0))
-    Output[1,:] = θ0
-    oldx = x0;
-    Ind = 0
-    for n = 2:(N+1)
-        newθ = rand(MultivariateNormal(Output[n-1,:],δ^2*Σ))
-        if log(rand(Uniform(0,1))) < U(newθ) - U(Output[n-1,:])
-            newx = SimulateOne(newθ,d)
-            if norm(newx .- y) < ϵ
-                oldx = newx
-                Output[n,:] = newθ
-                Ind += 1
-            else
-                Output[n,:] = Output[n-1,:]
-            end
-        else
-            println("Reject")
-            Output[n,:] = Output[n-1,:]
-        end
-    end
-    return (Output, oldx, Ind)
-end
-
-function SMC(N,y;InitStep,MinStep,MinProb,IterScheme,InitIter,PropParMoved,TolScheme,η,TerminalTol,TerminalProb=0.01)
-    ### Initialisation ###
-    L = length(y)
-    # U - particles for the parameters, each coloumn represents one particle
-    U = Array{Matrix{Float64},1}(undef,0)
-    push!(U,zeros(4,N))
-    EPSILON = zeros(1)
-    DISTANCE = zeros(N,1)
-    WEIGHT = zeros(N,1)
-    ANCESTOR = zeros(Int64,N,0)
-    K = zeros(Int64,1); K[1] = InitIter;
-    X = Array{Matrix{Float64},1}(undef,0)
-    # X - pseudo-observations associated with each set of parameters stored in U
-    # each coloumn represents o set of pseudo-observations
-    push!(X,zeros(L,N))
-    IndividualAcceptedNum = zeros(N); 
-    AcceptanceProb = zeros(1); 
-    # Set the first acceptance probability to be 1 to make the while loop work
-    AcceptanceProb[1] = 1.0;
-    StepSize = zeros(1); StepSize[1] = InitStep
-    UniqueParticles = zeros(0)
-    UniqueStartingPoints = zeros(0)
-    ESS = zeros(0)
-    ### Simulate the initial parameters & pseudo observations from prior ###
-    for i = 1:N
-        U[1][:,i] = rand(Uniform(0,10),4)
-        X[1][:,i] = SimulateOne(U[1][:,i],L ÷2)
-        DISTANCE[i,1] = norm(X[1][:,i] .- y)
-    end
-    push!(UniqueParticles,length(unique(DISTANCE[:,1])))
-    WEIGHT[:,1] .= 1.0/N; t = 0;
-    push!(ESS,1/sum(WEIGHT[:,end].^2))
-    EPSILON[1] = findmax(DISTANCE[:,1])[1]
-    timevec = zeros(0)
-    ### ABC-SMC Part ### 
-    while (AcceptanceProb[end] > TerminalProb) & (EPSILON[end] > TerminalTol)
-        t += 1
-        ### Resampling Step ###
-        ANCESTOR = hcat(ANCESTOR,vcat(fill.(1:N,rand(Multinomial(N,WEIGHT[:,t])))...));
-
-        ### Choose Next Tolerance According to the Input Scheme ###
-        if TolScheme == "unique"
-            push!(EPSILON,quantile(unique(DISTANCE[ANCESTOR[:,t],t]),η))
-        elseif TolScheme == "ess"
-            push!(EPSILON,quantile(DISTANCE[ANCESTOR[:,t],t],η))
-        end
-        ### Calculate the weight for the next iteration
-        WEIGHT = hcat(WEIGHT,(DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1])/sum(DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1]))
-        push!(ESS,1/sum(WEIGHT[:,end].^2))
-        println("SMC Step: ", t)
-        push!(UniqueStartingPoints,length(unique(DISTANCE[ANCESTOR[:,t],t])))
-        println("epsilon = ", round(EPSILON[t+1],sigdigits=5), " No. Unique Starting Point: ", length(unique(DISTANCE[ANCESTOR[:,t],t])))
-        println("K = ", K[t])
-        Σ = cov(U[t][:,findall(WEIGHT[:,t].>0)],dims=2) + 1e-8*I
-        index = findall(WEIGHT[:,t+1] .> 0.0)
-        println("Performing local Metropolis-Hastings...")
-        push!(U,zeros(4,N)); push!(X,zeros(L,N)); 
-        DISTANCE = hcat(DISTANCE,zeros(N));
-        ### ABC-MCMC exploration for alive particles 
-        v = @timed Threads.@threads for i = 1:length(index)
-            U[t+1][:,index[i]],X[t+1][:,index[i]],IndividualAcceptedNum[index[i]] = ABC_MCMC(K[t],U[t][:,ANCESTOR[index[i],t]],X[t][:,ANCESTOR[index[i],t]],y=y,ϵ=EPSILON[t+1],δ=StepSize[end],Σ=Σ)
-            GC.safepoint()
-            DISTANCE[index[i],t+1] = norm(X[t+1][:,index[i]] .- y)
-        end
-        push!(UniqueParticles,length(unique(DISTANCE[findall(WEIGHT[:,t+1].>0),t+1])))
-        push!(timevec,v.time-v.gctime)
-        ### Estimate the acceptance probability for the ABC_MCMC algorithm
-        push!(AcceptanceProb,mean(IndividualAcceptedNum[index])/K[end])
-        if IterScheme=="Adaptive"
-            push!(K,Int64(ceil(log(1-PropParMoved)/log(1-AcceptanceProb[end]))))
-        elseif IterScheme == "Fixed"
-            push!(K,InitIter)
-        end
-        ### Tune the step size ### 
-        if (AcceptanceProb[end] < MinProb) & (StepSize[end] > MinStep)
-            push!(StepSize,exp(log(StepSize[end]) + 0.5*(AcceptanceProb[end] - MinProb)))
-        else
-            push!(StepSize,StepSize[end])
-        end
-        println("Average Acceptance Probability is ", AcceptanceProb[t])
-        println("The step size used in the next SMC iteration is ",StepSize[end])
-        print("\n\n")
-    end
-    return (U=U,X=X,EPSILON=EPSILON,DISTANCE=DISTANCE,WEIGHT=WEIGHT,ANCESTOR=ANCESTOR,AcceptanceProb=AcceptanceProb,K=K[1:end-1],StepSize=StepSize[1:end-1],time=timevec,ESS=ESS,UniqueParticles=UniqueParticles,UniqueStartingPoints=UniqueStartingPoints)
-end
+Random.seed!(17372);
+θstar = log.([0.4,0.005,0.05,0.001]);
+ustar = rand(Normal(0,1),100);
+ystar = ϕ(ustar,θ=θstar);
 
 
+R = RandomWalk.SMC(1000,ystar,InitStep=0.3,MinStep=0.2,MinProb=0.2,IterScheme="Adaptive",InitIter=5,PropParMoved=0.99,TolScheme="unique",η=0.9,TerminalTol=1.0,TerminalProb=0.01)
 
-Random.seed!(17372)
-θstar = log.([0.4,0.005,0.05,0.001])
-ustar = rand(Normal(0,1),100)
-ystar = ϕ(ustar,θ=θstar)
-
-
-R = SMC(1000,ystar,InitStep=0.3,MinStep=0.1,MinProb=0.1,IterScheme="Adaptive",InitIter=100,PropParMoved=0.99,TolScheme="unique",η=0.9,TerminalTol=10,TerminalProb=0.01)
+R3 = RandomWalk.SMC(1000,ystar,InitStep=0.3,MinStep=0.2,MinProb=0.2,IterScheme="Adaptive",InitIter=5,PropParMoved=0.99,TolScheme="unique",η=0.9,TerminalTol=1.0,TerminalProb=0.01)
+R2 = DelMoral.SMC(1000,ystar,InitStep=0.3,MinStep=0.2,MinProb=0.2,IterScheme="Adaptive",InitIter=5,PropParMoved=0.99,TolScheme="unique",η=0.9,TerminalTol=0.1,TerminalProb=0.01)
 Index = findall(R.WEIGHT[:,end] .> 0)
 X = R.U[end][:,Index]
-
+Index2 = findall(R2.WEIGHT[:,end] .> 0)
+X2 = R2.U[end][:,Index2]
 using Plots, StatsPlots
-density(X[1,:]); vline!([log(0.4)])
-density(X[2,:]); vline!([log(0.005)])
-density(X[3,:]);vline!([log(0.05)])
-density(X[4,:]);vline!([log(0.001)])
+p1 = density(X[1,:],label="RW-ABC-SMC",size=(600,600),xlabel="log(theta_1)"); vline!([log(0.4)],label="");density!(X2[1,:],label="Standard ABC-SMC")
+p2 = density(X[2,:],label="RW-ABC-SMC",size=(600,600),xlabel="log(theta_2)"); vline!([log(0.005)],label="");density!(X2[2,:],label="Standard ABC-SMC")
+p3 = density(X[3,:],label="RW-ABC-SMC",size=(600,600),xlabel="log(theta_3)");vline!([log(0.05)],label="");density!(X2[3,:],label="Standard ABC-SMC")
+p4 = density(X[4,:],label="RW-ABC-SMC",size=(600,600),xlabel="log(theta_4)");vline!([log(0.001)],label="");density!(X2[4,:],label="ABC-SMC")
+ 
+plot(R.AcceptanceProb,label="RW-ABC-SMC")
+plot!(R2.AcceptanceProb,label="Standard ABC-SMC")
 
-plot(R.X[end][1:50,Index[1]],label="",linewidth=0.02,color=:grey);
-for i = 2:length(Index)
-    plot!(R.X[end][1:50,Index[i]],label="",linewidth=0.02,color=:grey);
+
+plot(p1,p2,p3,p4,layout=(2,2),size=(1200,1200))
+
+plot(R2.X[end][1:20,Index2[1]],label="",linewidth=0.02,color=:grey);
+for i = 2:length(Index2)
+    plot!(R2.X[end][1:20,Index2[i]],label="",linewidth=0.02,color=:grey);
 end
-plot!(ystar[1:50],color=:red,linewidth=3.0,label="");
+plot!(ystar[1:20],color=:red,linewidth=3.0,label="");
 
-plot!(R.X[end][51:100,Index[1]],label="",linewidth=0.02,color=:grey);
-for i = 2:length(Index)
-    plot!(R.X[end][51:100,Index[i]],label="",linewidth=0.02,color=:grey);
+plot!(R2.X[end][21:40,Index2[1]],label="",linewidth=0.02,color=:grey);
+for i = 2:length(Index2)
+    plot!(R2.X[end][21:40,Index2[i]],label="",linewidth=0.02,color=:grey);
 end
-plot!(ystar[51:100],color=:green,linewidth=3.0,label="")
+plot!(ystar[21:40],color=:green,linewidth=3.0,label="")
 
-plot(R.K)
+plot(log.(R.EPSILON))
+plot!(log.(R2.EPSILON))
+
+g(x) = ϕ(x[5:end],θ=x[1:4])
+plot(R.time ./ R.K)
+plot!(R2.time ./ R2.K)
+x0 = X[:,1]
+
+RandomWalk.Euclidean(x0,y=ystar)
+R = @time RandomWalk.MCMC(10000,x0,1.0,y=ystar,δ=0.2,Σ = Σ);
+Euclidean(x;y) = norm(ϕ(x[5:end],θ=x[1:4]) .- y)
+U(x) = sum(logpdf.(Normal(-2,3),x[1:4])) + sum(logpdf.(Normal(0,1),x[5:end]))
+function MCMC(N,x0,ϵ;y,δ,Σ)
+    oldx = x0
+    Ind = 0
+    d = length(x0)
+    @timeit to "Factorization" L = cholesky(Σ).L
+    for n = 2:N
+        @timeit to "Sampling" newx = oldx .+ δ*L*rand(Normal(0,1),d)
+        if log(rand(Uniform(0,1))) < @timeit to "Prior" U(newx) - U(oldx)
+            if @timeit to  "Distance" Euclidean(newx,y=y) < ϵ
+                oldx = newx
+                Ind += 1
+            end
+        end
+    end
+    return (oldx,Ind)
+end
+
+to = TimerOutput()
+MCMC(10000,x0,1.0,y=ystar,δ=0.2,Σ = Σ)
+show(to)
+C = cholesky(Σ)
+C.L == transpose(C.U)
+
+plot(R.AcceptanceProb)
+plot!(R2.AcceptanceProb)
