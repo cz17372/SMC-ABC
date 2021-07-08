@@ -30,8 +30,10 @@ function MCMC(N,x0,ϵ;y,δ,Σ)
     Ind = 0
     d = length(x0)
     L = cholesky(Σ).L
-    for n = 2:N
-        newx = oldx .+ δ*L*rand(Normal(0,1),d)
+    Seed = rand(Normal(0,1),d,N)
+    PropMove = δ*L*Seed
+    for n = 1:N
+        newx = oldx .+ PropMove[:,n]
         # newx = rand(MultivariateNormal(oldx,δ^2*Σ))
         if log(rand(Uniform(0,1))) < U(newx) - U(oldx)
             if Euclidean(newx,y=y) < ϵ

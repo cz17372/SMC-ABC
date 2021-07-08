@@ -1,7 +1,11 @@
-using Plots: Random
+using Base: sign_mask
+using Distributions: delta
+using Plots: get_linewidth
 using Distributions, Plots, StatsPlots
 using Random
 using LinearAlgebra
+using JLD2
+theme(:wong2)
 cd("LV")
 include("DelMoralABCSMC.jl")
 include("RandomWalk.jl")
@@ -22,65 +26,67 @@ function SimulateOne(θ,N)
     u = rand(Normal(0,1),2*N)
     return ϕ(u,θ=θ)
 end
+@load "DelMoral.jld2"
+@load "DelMoral_20data.jld2"
+@load "RW_20data.jld2"
+@load "RW_100data.jld2"
 Random.seed!(17372);
 θstar = log.([0.4,0.005,0.05,0.001]);
-ustar = rand(Normal(0,1),100);
+ustar = rand(Normal(0,1),40);
 ystar = ϕ(ustar,θ=θstar);
 
-
-R = RandomWalk.SMC(1000,ystar,InitStep=0.3,MinStep=0.2,MinProb=0.2,IterScheme="Adaptive",InitIter=5,PropParMoved=0.99,TolScheme="unique",η=0.9,TerminalTol=1.0,TerminalProb=0.01)
-
-R3 = RandomWalk.SMC(1000,ystar,InitStep=0.3,MinStep=0.2,MinProb=0.2,IterScheme="Adaptive",InitIter=5,PropParMoved=0.99,TolScheme="unique",η=0.9,TerminalTol=1.0,TerminalProb=0.01)
-R2 = DelMoral.SMC(1000,ystar,InitStep=0.3,MinStep=0.2,MinProb=0.2,IterScheme="Adaptive",InitIter=5,PropParMoved=0.99,TolScheme="unique",η=0.9,TerminalTol=0.1,TerminalProb=0.01)
-Index = findall(R.WEIGHT[:,end] .> 0)
-X = R.U[end][:,Index]
-Index2 = findall(R2.WEIGHT[:,end] .> 0)
-X2 = R2.U[end][:,Index2]
-using Plots, StatsPlots
-p1 = density(X[1,:],label="RW-ABC-SMC",size=(600,600),xlabel="log(theta_1)"); vline!([log(0.4)],label="");density!(X2[1,:],label="Standard ABC-SMC")
-p2 = density(X[2,:],label="RW-ABC-SMC",size=(600,600),xlabel="log(theta_2)"); vline!([log(0.005)],label="");density!(X2[2,:],label="Standard ABC-SMC")
-p3 = density(X[3,:],label="RW-ABC-SMC",size=(600,600),xlabel="log(theta_3)");vline!([log(0.05)],label="");density!(X2[3,:],label="Standard ABC-SMC")
-p4 = density(X[4,:],label="RW-ABC-SMC",size=(600,600),xlabel="log(theta_4)");vline!([log(0.001)],label="");density!(X2[4,:],label="ABC-SMC")
- 
-plot(R.AcceptanceProb,label="RW-ABC-SMC")
-plot!(R2.AcceptanceProb,label="Standard ABC-SMC")
-
-
+# Get the plot of posterior density
+p1 = get_density(RW_20data,1,length(RW_20data.EPSILON),truepar=θstar[1],color=:green,label="RW-ABC-SMC",xlabel="log(theta_1)")
+get_density(DelMoral_20data,1,length(DelMoral_20data.EPSILON),truepar=θstar[1],label="Std-ABC-SMC",color=:black,new=false)
+p2 = get_density(RW_20data,2,length(RW_20data.EPSILON),truepar=θstar[2],color=:green,label="RW-ABC-SMC",xlabel="log(theta_2)")
+get_density(DelMoral_20data,2,length(DelMoral_20data.EPSILON),truepar=θstar[2],label="Std-ABC-SMC",color=:black,new=false)
+p3 = get_density(RW_20data,3,length(RW_20data.EPSILON),truepar=θstar[3],color=:green,label="RW-ABC-SMC",xlabel="log(theta_3)")
+get_density(DelMoral_20data,3,length(DelMoral_20data.EPSILON),truepar=θstar[3],label="Std-ABC-SMC",color=:black,new=false)
+p4 = get_density(RW_20data,4,length(RW_20data.EPSILON),truepar=θstar[4],color=:green,label="RW-ABC-SMC",xlabel="log(theta_4)")
+get_density(DelMoral_20data,4,length(DelMoral_20data.EPSILON),truepar=θstar[4],label="Std-ABC-SMC",color=:black,new=false)
 plot(p1,p2,p3,p4,layout=(2,2),size=(1200,1200))
+rw_20data_pobs = get_rw_pseudo_obs(RW_20data,length(RW_20data.EPSILON))
+std_20data_pobs = get_std_psudo_obs(DelMoral_20data,length(DelMoral_20data.EPSILON))
+p1 = plot_data(rw_20data_pobs,linewidth=1.0);plot_obs(ystar,new=false)
+p2 = plot_data(std_20data_pobs,linewidth=0.2);plot_obs(ystar,new=false)
 
-plot(R2.X[end][1:20,Index2[1]],label="",linewidth=0.02,color=:grey);
-for i = 2:length(Index2)
-    plot!(R2.X[end][1:20,Index2[i]],label="",linewidth=0.02,color=:grey);
-end
-plot!(ystar[1:20],color=:red,linewidth=3.0,label="");
+plot(p1,p2,layout=(2,1),size=(600,1200))
 
-plot!(R2.X[end][21:40,Index2[1]],label="",linewidth=0.02,color=:grey);
-for i = 2:length(Index2)
-    plot!(R2.X[end][21:40,Index2[i]],label="",linewidth=0.02,color=:grey);
-end
-plot!(ystar[21:40],color=:green,linewidth=3.0,label="")
+p1 = plot(RW_20data.AcceptanceProb,xlabel="Iteration",ylabel="Acceptance Probability",label="RW-ABC-SMC",size=(600,600))
+plot!(DelMoral_20data.AcceptanceProb,label="Std-ABC-SMC")
+p2 = plot(log.(RW_20data.EPSILON),xlabel="Iteration",ylabel="Log-Tolerance",label="RW-ABC-SMC")
+plot!(log.(DelMoral_20data.EPSILON),label="Std-ABC-SMC")
 
-plot(log.(R.EPSILON))
-plot!(log.(R2.EPSILON))
 
-g(x) = ϕ(x[5:end],θ=x[1:4])
-plot(R.time ./ R.K)
-plot!(R2.time ./ R2.K)
-x0 = X[:,1]
 
-RandomWalk.Euclidean(x0,y=ystar)
-R = @time RandomWalk.MCMC(10000,x0,1.0,y=ystar,δ=0.2,Σ = Σ);
+
+
+
+
+
+
+
+R = RandomWalk.SMC(1000,ystar,InitStep=0.3,MinStep=0.2,MinProb=0.2,IterScheme="Adaptive",InitIter=5,PropParMoved=0.99,TolScheme="unique",η=0.95,TerminalTol=5.0,TerminalProb=0.01)
+R2 = DelMoral.SMC(1000,ystar,InitStep=0.3,MinStep=0.2,MinProb=0.2,IterScheme="Fixed",InitIter=2,PropParMoved=0.99,TolScheme="unique",η=0.95,TerminalTol=0.1,TerminalProb=0.01)
+using Plots, StatsPlots
+theme(:wong2)
+
+
+Index = findall(RW_100data.WEIGHT[:,end] .> 0)
+X = RW_100data.U[end][:,Index]
+Σ = cov(X,dims=2)
 Euclidean(x;y) = norm(ϕ(x[5:end],θ=x[1:4]) .- y)
 U(x) = sum(logpdf.(Normal(-2,3),x[1:4])) + sum(logpdf.(Normal(0,1),x[5:end]))
 function MCMC(N,x0,ϵ;y,δ,Σ)
     oldx = x0
     Ind = 0
     d = length(x0)
-    @timeit to "Factorization" L = cholesky(Σ).L
+    L = cholesky(Σ).L
     for n = 2:N
-        @timeit to "Sampling" newx = oldx .+ δ*L*rand(Normal(0,1),d)
-        if log(rand(Uniform(0,1))) < @timeit to "Prior" U(newx) - U(oldx)
-            if @timeit to  "Distance" Euclidean(newx,y=y) < ϵ
+        newx = oldx .+ δ*L*rand(Normal(0,1),d)
+        # newx = rand(MultivariateNormal(oldx,δ^2*Σ))
+        if log(rand(Uniform(0,1))) < U(newx) - U(oldx)
+            if Euclidean(newx,y=y) < ϵ
                 oldx = newx
                 Ind += 1
             end
@@ -89,11 +95,27 @@ function MCMC(N,x0,ϵ;y,δ,Σ)
     return (oldx,Ind)
 end
 
-to = TimerOutput()
-MCMC(10000,x0,1.0,y=ystar,δ=0.2,Σ = Σ)
-show(to)
-C = cholesky(Σ)
-C.L == transpose(C.U)
+@time MCMC(10000,X[:,1],1.0,y=ystar,δ = 0.2,Σ = Σ)
 
-plot(R.AcceptanceProb)
-plot!(R2.AcceptanceProb)
+
+function MCMC2(N,x0,ϵ;y,δ,Σ)
+    oldx = x0
+    Ind = 0
+    d = length(x0)
+    L = cholesky(Σ).L
+    Seed = rand(Normal(0,1),d,N)
+    PropMove = δ * L * Seed
+    for n = 1:N
+        newx = oldx .+ PropMove[:,n]
+        # newx = rand(MultivariateNormal(oldx,δ^2*Σ))
+        if log(rand(Uniform(0,1))) < U(newx) - U(oldx)
+            if Euclidean(newx,y=y) < ϵ
+                oldx = newx
+                Ind += 1
+            end
+        end
+    end
+    return (oldx,Ind)
+end
+
+@time MCMC2(10000,X[:,1],1.0,y=ystar,δ = 0.2,Σ = Σ)
