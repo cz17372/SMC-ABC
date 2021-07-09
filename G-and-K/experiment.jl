@@ -93,7 +93,7 @@ if choice == 1
     println("The name for the result file:")
     name = readline()
     @save name Results
-elseif choice == "2"
+elseif choice == 2
     include("RandomWalk/RWABCSMC.jl")
     println("The RandomWalk ABC-SMC method is used....")
     println("Enter the number of particles used:")
