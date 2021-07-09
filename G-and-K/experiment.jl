@@ -132,7 +132,7 @@ elseif choice == 2
     TerminalProb = readline(); TerminalProb = parse(Float64,TerminalProb)
 
     println("Eneter the number of replica needed:")
-    m = readline(); m = parse(Int64,M)
+    m = readline(); m = parse(Int64,m)
 
     EPSILON = Array{Any,1}(undef,m)
     K       = Array{Any,1}(undef,m)
