@@ -144,7 +144,7 @@ elseif choice == 2
     UniqueStartingPoints = Array{Any,1}(undef,m)
     UniqueParticles     = Array{Any,1}(undef,m)
     for i = 1:m
-        R = RWSMCABC.SMC(N,ystar,InitStep=InitStep,MinStep=MinStep,MinProb=MinProb,IterScheme=IterShheme,InitIter=InitIter,PropParMoved=PropParMoved,TolScheme=TolScheme,η=η,TerminalTol=TerminalTol,TerminalProb=TerminalProb)
+        R = RWSMCABC.SMC(N,ystar,InitStep=InitStep,MinStep=MinStep,MinProb=MinProb,IterScheme=IterScheme,InitIter=InitIter,PropParMoved=PropParMoved,TolScheme=TolScheme,η=η,TerminalTol=TerminalTol,TerminalProb=TerminalProb)
         EPSILON[i] = R.EPSILON
         K[i]       = R.K 
         AcceptanceProb[i]       = R.AcceptanceProb
