@@ -1,6 +1,4 @@
 using Base: sign_mask
-using Distributions: delta
-using Plots: get_linewidth
 using Distributions, Plots, StatsPlots
 using Random
 using LinearAlgebra
@@ -32,7 +30,7 @@ end
 @load "RW_100data.jld2"
 Random.seed!(17372);
 θstar = log.([0.4,0.005,0.05,0.001]);
-ustar = rand(Normal(0,1),40);
+ustar = rand(Normal(0,1),100);
 ystar = ϕ(ustar,θ=θstar);
 
 # Get the plot of posterior density
@@ -66,17 +64,19 @@ plot!(log.(DelMoral_20data.EPSILON),label="Std-ABC-SMC")
 
 
 
-R = RandomWalk.SMC(1000,ystar,InitStep=0.3,MinStep=0.2,MinProb=0.2,IterScheme="Adaptive",InitIter=5,PropParMoved=0.99,TolScheme="unique",η=0.95,TerminalTol=5.0,TerminalProb=0.01)
+R = RandomWalk.SMC(1000,ystar,InitStep=0.3,MinStep=0.2,MinProb=0.2,IterScheme="Adaptive",InitIter=5,PropParMoved=0.99,TolScheme="unique",η=0.9,TerminalTol=5.0,TerminalProb=0.01)
 R2 = DelMoral.SMC(1000,ystar,InitStep=0.3,MinStep=0.2,MinProb=0.2,IterScheme="Fixed",InitIter=2,PropParMoved=0.99,TolScheme="unique",η=0.95,TerminalTol=0.1,TerminalProb=0.01)
 using Plots, StatsPlots
 theme(:wong2)
-
-
-Index = findall(RW_100data.WEIGHT[:,end] .> 0)
-X = RW_100data.U[end][:,Index]
+plot(R.AcceptanceProb)
+mean(R.time ./ R.K)
+plot(R.time ./ R.K)
+Index = findall(R.WEIGHT[:,end] .> 0)
+X = R.U[end][:,Index]
 Σ = cov(X,dims=2)
+get_density(R,1,length(R.EPSILON),truepar=θstar[1])
 Euclidean(x;y) = norm(ϕ(x[5:end],θ=x[1:4]) .- y)
-U(x) = sum(logpdf.(Normal(-2,3),x[1:4])) + sum(logpdf.(Normal(0,1),x[5:end]))
+U(x) = prod(pdf.(Normal(-2,3),x[1:4]))*prod(pdf.(Normal(0,1),x[5:end]))
 function MCMC(N,x0,ϵ;y,δ,Σ)
     oldx = x0
     Ind = 0
@@ -85,7 +85,7 @@ function MCMC(N,x0,ϵ;y,δ,Σ)
     for n = 2:N
         newx = oldx .+ δ*L*rand(Normal(0,1),d)
         # newx = rand(MultivariateNormal(oldx,δ^2*Σ))
-        if log(rand(Uniform(0,1))) < U(newx) - U(oldx)
+        if rand(Uniform(0,1)) < U(newx)/U(oldx)
             if Euclidean(newx,y=y) < ϵ
                 oldx = newx
                 Ind += 1
@@ -97,19 +97,20 @@ end
 
 @time MCMC(10000,X[:,1],1.0,y=ystar,δ = 0.2,Σ = Σ)
 
-
-function MCMC2(N,x0,ϵ;y,δ,Σ)
+using TimerOutputs
+to = TimerOutput()
+L = cholesky(Σ).L
+function MCMC2(N,x0,ϵ;y,δ,L)
     oldx = x0
     Ind = 0
     d = length(x0)
-    L = cholesky(Σ).L
-    Seed = rand(Normal(0,1),d,N)
-    PropMove = δ * L * Seed
+    @timeit to "Generate Seed" Seed = rand(Normal(0,1),d,N)
+    @timeit to "Transform Seed" PropMove = δ * L * Seed
     for n = 1:N
-        newx = oldx .+ PropMove[:,n]
+        @timeit to "Propose Move" newx = oldx .+ PropMove[:,n]
         # newx = rand(MultivariateNormal(oldx,δ^2*Σ))
-        if log(rand(Uniform(0,1))) < U(newx) - U(oldx)
-            if Euclidean(newx,y=y) < ϵ
+        if rand(Uniform(0,1)) < @timeit to "Prior" U(newx)/U(oldx)
+            if @timeit to "Distance" Euclidean(newx,y=y) < ϵ
                 oldx = newx
                 Ind += 1
             end
@@ -118,4 +119,6 @@ function MCMC2(N,x0,ϵ;y,δ,Σ)
     return (oldx,Ind)
 end
 
-@time MCMC2(10000,X[:,1],1.0,y=ystar,δ = 0.2,Σ = Σ)
+to = TimerOutput();
+MCMC2(20,X[:,1],5.0,y=ystar,δ = 0.2,L = L)
+show(to)
