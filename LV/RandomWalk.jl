@@ -25,11 +25,10 @@ function logpi(x;ϵ,y)
         return -Inf
     end
 end
-function MCMC(N,x0,ϵ;y,δ,Σ)
+function MCMC(N,x0,ϵ;y,δ,L)
     oldx = x0
     Ind = 0
     d = length(x0)
-    L = cholesky(Σ).L
     Seed = rand(Normal(0,1),d,N)
     PropMove = δ*L*Seed
     for n = 1:N
@@ -90,14 +89,14 @@ function SMC(N,y;InitStep,MinStep,MinProb,IterScheme,InitIter,PropParMoved,TolSc
         println("epsilon = ", round(EPSILON[t+1],sigdigits=5), " No. Unique Starting Point: ", length(unique(DISTANCE[ANCESTOR[:,t],t])))
         println("K = ", K[t])
         Σ = cov(U[t][:,findall(WEIGHT[:,t].>0)],dims=2) + 1e-8*I
+        A = cholesky(Σ).L
         index = findall(WEIGHT[:,t+1] .> 0.0)
         println("Performing local Metropolis-Hastings...")
         push!(U,zeros(4+L,N)); 
         DISTANCE = hcat(DISTANCE,zeros(N));
         ### ABC-MCMC exploration for alive particles 
         v = @timed Threads.@threads for i = 1:length(index)
-            U[t+1][:,index[i]],IndividualAcceptedNum[index[i]] = MCMC(K[t],U[t][:,ANCESTOR[index[i],t]],EPSILON[t+1],y=y,δ=StepSize[end],Σ=Σ)
-            GC.safepoint()
+            U[t+1][:,index[i]],IndividualAcceptedNum[index[i]] = MCMC(K[t],U[t][:,ANCESTOR[index[i],t]],EPSILON[t+1],y=y,δ=StepSize[end],L=A)
             DISTANCE[index[i],t+1] = Euclidean(U[t+1][:,index[i]],y=y)
         end
         push!(UniqueParticles,length(unique(DISTANCE[findall(WEIGHT[:,t+1].>0),t+1])))
