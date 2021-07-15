@@ -1,4 +1,5 @@
 module DelMoralSMCABC
+using LinearAlgebra: cholcopy
 using Distributions, LinearAlgebra
 
 f(z;θ) = θ[1] + θ[2]*(1+0.8*(1-exp(-θ[3]*z))/(1+exp(-θ[3]*z)))*(1+z^2)^θ[4]*z;
@@ -15,7 +16,7 @@ Sample one or more sets of pseudo-observations from the underlying generative mo
 function Simulate(N,θ,d)
     Output = zeros(N,d)
     for n = 1:N
-        Output[n,:] = f.(rand(Normal(0,1),d),θ=θ)
+        Output[n,:] = f.(rand(Normal(0,1),d),θ=10.0*θ)
     end
     return Output
 end
@@ -29,7 +30,7 @@ Generate one set of pseudo observations from the underlying generative model.
 - `d::Int`: the number of pseudo observations simulated from the generator. 
 """
 function SimulateOne(θ,d)
-    return f.(rand(Normal(0,1),d),θ=θ)
+    return f.(rand(Normal(0,1),d),θ=10.0*θ)
 end
 
 
@@ -48,14 +49,16 @@ Perform the ABC_MCMC algorithm targeting the ABC density defined by the hard ker
 # Returns
 The function will return the last set of parameters at the end of `N` MH steps, the last set of pseudo-observations and the number of accepted proposals at among `N` MH steps.
 """
-function ABC_MCMC(N,θ0,x0;y,ϵ,δ,Σ)
+function ABC_MCMC(N,θ0,x0;y,ϵ,δ,L)
     d = length(x0)
     oldθ = θ0
     oldx = x0;
     Ind = 0
-    for n = 2:(N+1)
-        newθ = rand(MultivariateNormal(oldθ,δ^2*Σ))
-        if all(newθ .> 0.0) & all(newθ .< 10.0)
+    Seeds = rand(Normal(0,1),length(θ0),N)
+    Proposals = δ * L * Seeds
+    for n = 1:N
+        newθ = oldθ .+ Proposals[:,n]
+        if all(0.0 .< newθ .< 1.0)
             newx = SimulateOne(newθ,d)
             if norm(newx .- y) < ϵ
                 oldx = newx
@@ -89,7 +92,7 @@ ABC-SMC algorithm using ABC-MCMC to move the particles. Only one set of pseudo-o
 # Returns
 
 """
-function SMC(N,y;InitStep,MinStep,MinProb,IterScheme,InitIter,PropParMoved,TolScheme,η,TerminalTol,TerminalProb=0.01)
+function SMC(N,y;InitStep=0.1,MinStep=0.1,MinProb=0.2,IterScheme="Adaptive",InitIter=5,PropParMoved=0.99,TolScheme="unique",η=0.9,TerminalTol=1.0,TerminalProb=0.01)
     ### Initialisation ###
     L = length(y)
     # U - particles for the parameters, each coloumn represents one particle
@@ -114,7 +117,7 @@ function SMC(N,y;InitStep,MinStep,MinProb,IterScheme,InitIter,PropParMoved,TolSc
     ESS = zeros(0)
     ### Simulate the initial parameters & pseudo observations from prior ###
     for i = 1:N
-        U[1][:,i] = rand(Uniform(0,10),4)
+        U[1][:,i] = rand(Uniform(0,1),4)
         X[1][:,i] = SimulateOne(U[1][:,i],L)
         DISTANCE[i,1] = norm(X[1][:,i] .- y)
     end
@@ -143,13 +146,14 @@ function SMC(N,y;InitStep,MinStep,MinProb,IterScheme,InitIter,PropParMoved,TolSc
         println("epsilon = ", round(EPSILON[t+1],sigdigits=5), " No. Unique Starting Point: ", length(unique(DISTANCE[ANCESTOR[:,t],t])))
         println("K = ", K[t])
         Σ = cov(U[t][:,findall(WEIGHT[:,t].>0)],dims=2) + 1e-8*I
+        A = cholesky(Σ).L
         index = findall(WEIGHT[:,t+1] .> 0.0)
         println("Performing local Metropolis-Hastings...")
         push!(U,zeros(4,N)); push!(X,zeros(L,N)); 
         DISTANCE = hcat(DISTANCE,zeros(N));
         ### ABC-MCMC exploration for alive particles 
         v = @timed Threads.@threads for i = 1:length(index)
-            U[t+1][:,index[i]],X[t+1][:,index[i]],IndividualAcceptedNum[index[i]] = ABC_MCMC(K[t],U[t][:,ANCESTOR[index[i],t]],X[t][:,ANCESTOR[index[i],t]],y=y,ϵ=EPSILON[t+1],δ=StepSize[end],Σ=Σ)
+            U[t+1][:,index[i]],X[t+1][:,index[i]],IndividualAcceptedNum[index[i]] = ABC_MCMC(K[t],U[t][:,ANCESTOR[index[i],t]],X[t][:,ANCESTOR[index[i],t]],y=y,ϵ=EPSILON[t+1],δ=StepSize[end],L=A)
             GC.safepoint()
             DISTANCE[index[i],t+1] = norm(X[t+1][:,index[i]] .- y)
         end
@@ -163,11 +167,14 @@ function SMC(N,y;InitStep,MinStep,MinProb,IterScheme,InitIter,PropParMoved,TolSc
             push!(K,InitIter)
         end
         ### Tune the step size ### 
-        if (AcceptanceProb[end] < MinProb) & (StepSize[end] > MinStep)
+        push!(StepSize,max(MinStep,exp(log(StepSize[end]) + 0.5*(AcceptanceProb[end] - MinProb))))
+        """
+        if StepSize[end] > MinStep
             push!(StepSize,exp(log(StepSize[end]) + 0.5*(AcceptanceProb[end] - MinProb)))
         else
             push!(StepSize,StepSize[end])
         end
+        """
         println("Average Acceptance Probability is ", AcceptanceProb[t])
         println("The step size used in the next SMC iteration is ",StepSize[end])
         print("\n\n")
