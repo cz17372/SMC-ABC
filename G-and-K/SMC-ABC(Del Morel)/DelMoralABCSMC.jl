@@ -154,9 +154,9 @@ function SMC(N,y;InitStep=0.1,MinStep=0.1,MinProb=0.2,IterScheme="Adaptive",Init
         ### ABC-MCMC exploration for alive particles 
         v = @timed Threads.@threads for i = 1:length(index)
             U[t+1][:,index[i]],X[t+1][:,index[i]],IndividualAcceptedNum[index[i]] = ABC_MCMC(K[t],U[t][:,ANCESTOR[index[i],t]],X[t][:,ANCESTOR[index[i],t]],y=y,ϵ=EPSILON[t+1],δ=StepSize[end],L=A)
-            GC.safepoint()
             DISTANCE[index[i],t+1] = norm(X[t+1][:,index[i]] .- y)
         end
+        GC.gc()
         push!(UniqueParticles,length(unique(DISTANCE[findall(WEIGHT[:,t+1].>0),t+1])))
         push!(timevec,v.time-v.gctime)
         ### Estimate the acceptance probability for the ABC_MCMC algorithm
