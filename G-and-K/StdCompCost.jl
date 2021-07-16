@@ -20,7 +20,7 @@ SMCTimeVec  = zeros(10)
 
 
 
-for i = 1:25
+for i = 1:length(SMCTimeVec)
     R = DelMoralSMCABC.SMC(2000,ystar,η = 0.9,TerminalTol=tolerance_vec[i],MinStep=0.1,TerminalProb=0.0)
     CompCostVec[i] = log.(sum(R.K .* R.ESS[2:end])/R.ESS[end])
     SMCTimeVec[i]  = length(R.ESS) - 1
