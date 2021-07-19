@@ -7,10 +7,19 @@ L = readline()
 seed = parse(Int64,seed)
 L    = parse(Int64,L)
 
-f(z;θ) = θ[1] + θ[2]*(1+0.8*(1-exp(-θ[3]*z))/(1+exp(-θ[3]*z)))*(1+z^2)^θ[4]*z;
+function ϕ(u)
+    θ = 10.0*u[1:4]
+    z = quantile(Normal(0,1),u[5:end])
+    return f.(z,θ=θ)
+end
+function f(u;θ)
+    z = quantile(Normal(0,1),u)
+    return θ[1] + θ[2]*(1+0.8*(1-exp(-θ[3]*z))/(1+exp(-θ[3]*z)))*(1+z^2)^(θ[4])*z
+end
+Random.seed!(seed)
 θ0 = [3.0,1.0,2.0,0.5];
-Random.seed!(seed);
-ystar = f.(rand(Normal(0,1),L),θ=θ0);
+u0 = rand(L)
+ystar = f.(u0,θ=θ0)
 
 println("Choose the ABC-SMC method used:")
 println("1. Standard ABC-SMC    2. Random-Walk ABC-SMC")
@@ -94,7 +103,7 @@ if choice == 1
     name = readline()
     @save name Results
 elseif choice == 2
-    include("RandomWalk/RWABCSMC.jl")
+    include("RandomWalk/RW2.jl")
     println("The RandomWalk ABC-SMC method is used....")
     println("Enter the number of particles used:")
     N = readline();N = parse(Int64,N)
@@ -144,7 +153,7 @@ elseif choice == 2
     UniqueStartingPoints = Array{Any,1}(undef,m)
     UniqueParticles     = Array{Any,1}(undef,m)
     for i = 1:m
-        R = RWABCSMC.SMC(N,ystar,InitStep=InitStep,MinStep=MinStep,MinProb=MinProb,IterScheme=IterScheme,InitIter=InitIter,PropParMoved=PropParMoved,TolScheme=TolScheme,η=η,TerminalTol=TerminalTol,TerminalProb=TerminalProb)
+        R = RW.SMC(N,ystar,InitStep=InitStep,MinStep=MinStep,MinProb=MinProb,IterScheme=IterScheme,InitIter=InitIter,PropParMoved=PropParMoved,TolScheme=TolScheme,η=η,TerminalTol=TerminalTol,TerminalProb=TerminalProb)
         EPSILON[i] = R.EPSILON
         K[i]       = R.K 
         AcceptanceProb[i]       = R.AcceptanceProb
@@ -162,3 +171,4 @@ elseif choice == 2
     name = readline()
     @save name Results
 end
+

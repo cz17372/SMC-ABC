@@ -1,3 +1,4 @@
+using Plots: reset_defaults
 using ForwardDiff: derivative
 using JLD2, Plots, StatsPlots, Distributions, Random, LinearAlgebra
 theme(:ggplot2)
@@ -15,20 +16,25 @@ Random.seed!(123)
 u0 = rand(100)
 ystar = f.(u0,θ=θ0)
 include("RandomWalk/RW2.jl")
+R2 = RW.SMC(5000,ystar,η=0.95,TerminalTol=1.0)
+Epsilon = 1.0
+T = findfirst(R2.EPSILON .< Epsilon)
+Index = findall(R2.WEIGHT[:,T] .> 0)
+X = R2.U[T][:,Index]
+include("MCMC/MCMC.jl")
 
+R,alpha = RWM(10000,1.0*I,0.2)
+Σ = cov(R)
+R,alpha = RWM(100000,Σ,0.2)
 
-@load "RWCompCost.jld2"
-plot(Information.tolerance_vec,Information.CompCostVec,label="RW-ABC-SMC",xlabel="Terminal Tolerance",ylabel="Log(NoMCMC/ESS)");
-scatter!(Information.tolerance_vec,Information.CompCostVec,markershape=:circle,markersize=5.0,color=:darkolivegreen,label="");
-@load "StdCompCost.jld2"
-plot!(Information.tolerance_vec,Information.CompCostVec[1:10],label="Std-ABC-SMC",xlabel="Terminal Tolerance",ylabel="Log(NoMCMC/ESS)");
-scatter!(Information.tolerance_vec,Information.CompCostVec[1:10],markershape=:circle,markersize=5.0,color=:red,label="")
+plot(R[:,4])
 
+density(R[50001:end,1])
+density!(10*X[1,:])
 
+@load "try.jld2"
 
-@load "RWCompCost.jld2"
-plot(Information.tolerance_vec, Information.SMCTimeVec,xlabel="Terminal Tolerance",ylabel="No SMC Steps",label="RW-ABC-SMC")
-R = RW.SMC(2000,ystar,η = 0.8)
-Index = findall(R.WEIGHT[:,end] .> 0)
-X = R.U[end][:,Index]
+R = Results 
+X = R.U[1]
+
 density(10*X[4,:])
