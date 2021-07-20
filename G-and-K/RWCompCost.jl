@@ -12,7 +12,7 @@ u0 = rand(100);
 ystar = f.(u0,θ=θ0)
 
 
-include("RandomWalk/RW2.jl")
+include("src/RW.jl")
 
 tolerance_vec = collect(1:25)
 CompCostVec = zeros(25)

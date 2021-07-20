@@ -12,7 +12,7 @@ u0 = rand(100);
 ystar = f.(u0,θ=θ0)
 
 
-include("SMC-ABC(Del Morel)/DelMoralABCSMC.jl")
+include("src/DelMoralABCSMC.jl")
 
 tolerance_vec = collect(16:25)
 CompCostVec = zeros(10)

@@ -27,7 +27,7 @@ choice = readline()
 choice = parse(Int64,choice)
 
 if choice == 1
-    include("SMC-ABC(Del Morel)/DelMoralABCSMC.jl")
+    include("src/DelMoralABCSMC.jl")
     println("The standard ABC-SMC method is used....")
     println("Enter the number of particles used:")
     N = readline()
@@ -103,7 +103,7 @@ if choice == 1
     name = readline()
     @save name Results
 elseif choice == 2
-    include("RandomWalk/RW2.jl")
+    include("src/RW.jl")
     println("The RandomWalk ABC-SMC method is used....")
     println("Enter the number of particles used:")
     N = readline();N = parse(Int64,N)

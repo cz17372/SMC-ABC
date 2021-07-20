@@ -1,4 +1,3 @@
-using Plots: reset_defaults
 using ForwardDiff: derivative
 using JLD2, Plots, StatsPlots, Distributions, Random, LinearAlgebra
 theme(:ggplot2)
@@ -11,30 +10,37 @@ function f(u;θ)
     z = quantile(Normal(0,1),u)
     return θ[1] + θ[2]*(1+0.8*(1-exp(-θ[3]*z))/(1+exp(-θ[3]*z)))*(1+z^2)^(θ[4])*z
 end
+
 Random.seed!(123)
 θ0 = [3.0,1.0,2.0,0.5];
 u0 = rand(100)
 ystar = f.(u0,θ=θ0)
 include("RandomWalk/RW2.jl")
-R2 = RW.SMC(5000,ystar,η=0.95,TerminalTol=1.0)
-Epsilon = 1.0
-T = findfirst(R2.EPSILON .< Epsilon)
-Index = findall(R2.WEIGHT[:,T] .> 0)
-X = R2.U[T][:,Index]
 include("MCMC/MCMC.jl")
 
 R,alpha = RWM(10000,1.0*I,0.2)
 Σ = cov(R)
 R,alpha = RWM(100000,Σ,0.2)
 
-plot(R[:,4])
 
-density(R[50001:end,1])
-density!(10*X[1,:])
+@load "100data_RW5000Particles1.jld2"
+R = Results
+@load "100Data_RW5000Particles2.jld2"
+R2 = Results
+@load "100data_RW5000Particles3.jld2"
+R3 = Results
 
-@load "try.jld2"
 
-R = Results 
-X = R.U[1]
+i = 4
+density(10*R.U[1][i,:],label="",color=:darkolivegreen,size=(500,500));
+for n = 2:length(R.U)
+    density!(10*R.U[n][i,:],label="",color=:darkolivegreen);
+end
+for n = 1:length(R2.U)
+    density!(10*R2.U[n][i,:],label="",color=:red);
+end
+for n = 1:length(R3.U)
+    density!(10*R3.U[n][i,:],label="",color=:blue);
+end
+current()
 
-density(10*X[4,:])
