@@ -1,6 +1,6 @@
-module RandomWalk
+module RW
 using Distributions, LinearAlgebra
-function ϕ(u;θ)
+function f(u;θ)
     θ = exp.(θ)
     N = length(u) ÷ 2
     r0 = 100.0; f0 = 100.0; dt = 1.0; σr = 1.0; σf = 1.0; 
@@ -13,18 +13,15 @@ function ϕ(u;θ)
     end
     return [rvec[2:end];fvec[2:end]]
 end
-Euclidean(x;y) = norm(ϕ(x[5:end],θ=x[1:4]) .- y)
-SampleOne(L) = [rand(Normal(-2,3),4);rand(Normal(0,1),L)]
-U(x) = sum(logpdf.(Normal(-2,3),x[1:4])) + sum(logpdf.(Normal(0,1),x[5:end]))
-function logpi(x;ϵ,y)
-    if Euclidean(x,y=y) < ϵ
-        logpdf_θ = sum(logpdf.(Normal(-2,3),x[1:4]))
-        logpdf_u = sum(logpdf.(Normal(0,1),x[5:end]))
-        return logpdf_u + logpdf_θ
-    else
-        return -Inf
-    end
+function ϕ(u)
+    θ = -2.0 .+ 3.0*quantile(Normal(0,1),u[1:4])
+    z = quantile(Normal(0,1),u[5:end])
+    return f(z,θ=θ)
 end
+
+Euclidean(u;y) = norm(ϕ(u) .- y)
+SampleOne(L) = ϕ(rand(4+L))
+
 function MCMC(N,x0,ϵ;y,δ,L)
     oldx = x0
     Ind = 0
@@ -34,7 +31,7 @@ function MCMC(N,x0,ϵ;y,δ,L)
     for n = 1:N
         newx = oldx .+ PropMove[:,n]
         # newx = rand(MultivariateNormal(oldx,δ^2*Σ))
-        if log(rand(Uniform(0,1))) < U(newx) - U(oldx)
+        if all(0.0 .< newx .< 1.0)
             if Euclidean(newx,y=y) < ϵ
                 oldx = newx
                 Ind += 1
@@ -43,7 +40,7 @@ function MCMC(N,x0,ϵ;y,δ,L)
     end
     return (oldx,Ind)
 end
-function SMC(N,y;InitStep,MinStep,MinProb,IterScheme,InitIter,PropParMoved,TolScheme,η,TerminalTol,TerminalProb=0.01)
+function SMC(N,y;InitStep=0.1,MinStep=0.1,MinProb=0.2,IterScheme="Adaptive",InitIter=5,PropParMoved=0.99,TolScheme="unique",η=0.9,TerminalTol=1.0,TerminalProb=0.01)
     ### Initialisation ###
     L = length(y)
     U = Array{Matrix{Float64},1}(undef,0)
@@ -63,7 +60,7 @@ function SMC(N,y;InitStep,MinStep,MinProb,IterScheme,InitIter,PropParMoved,TolSc
     ESS = zeros(0)
     ### Simulate Initial particles ###
     for i = 1:N
-        U[1][:,i] = SampleOne(L)
+        U[1][:,i] = rand(4+L)
         DISTANCE[i,1] = Euclidean(U[1][:,i],y=y)
     end
     push!(UniqueParticles,length(unique(DISTANCE[:,1])))
@@ -99,6 +96,7 @@ function SMC(N,y;InitStep,MinStep,MinProb,IterScheme,InitIter,PropParMoved,TolSc
             U[t+1][:,index[i]],IndividualAcceptedNum[index[i]] = MCMC(K[t],U[t][:,ANCESTOR[index[i],t]],EPSILON[t+1],y=y,δ=StepSize[end],L=A)
             DISTANCE[index[i],t+1] = Euclidean(U[t+1][:,index[i]],y=y)
         end
+        GC.gc()
         push!(UniqueParticles,length(unique(DISTANCE[findall(WEIGHT[:,t+1].>0),t+1])))
         push!(timevec,v.time-v.gctime)
         ### Estimate the acceptance probability for the ABC_MCMC algorithm
