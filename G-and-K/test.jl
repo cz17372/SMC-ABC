@@ -1,3 +1,4 @@
+using Plots: reset_defaults
 using ForwardDiff: derivative
 using JLD2, Plots, StatsPlots, Distributions, Random, LinearAlgebra
 theme(:ggplot2)
@@ -15,19 +16,19 @@ Random.seed!(123)
 θ0 = [3.0,1.0,2.0,0.5];
 u0 = rand(100)
 ystar = f.(u0,θ=θ0)
-include("RandomWalk/RW2.jl")
-include("MCMC/MCMC.jl")
+include("src/RW.jl")
+include("src/MCMC.jl")
 
 R,alpha = RWM(10000,1.0*I,0.2)
 Σ = cov(R)
 R,alpha = RWM(100000,Σ,0.2)
 
 
-@load "100data_RW5000Particles1.jld2"
+@load "data/100data_RW5000Particles1.jld2"
 R = Results
-@load "100Data_RW5000Particles2.jld2"
+@load "data/100Data_RW5000Particles2.jld2"
 R2 = Results
-@load "100data_RW5000Particles3.jld2"
+@load "data/100data_RW5000Particles3.jld2"
 R3 = Results
 
 
@@ -44,3 +45,12 @@ for n = 1:length(R3.U)
 end
 current()
 
+@load "data/100data_RW2000Particles1.jld2"
+
+R20data = reset_defaults
+i = 3
+density(10*R20data.U[1][i,:],label="",color=:darkolivegreen,size=(500,500));
+for n = 2:length(R20data.U)
+    density!(10*R20data.U[n][i,:],label="",color=:darkolivegreen);
+end
+current()

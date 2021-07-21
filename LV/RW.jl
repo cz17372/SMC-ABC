@@ -14,14 +14,13 @@ function f(u;θ)
     return [rvec[2:end];fvec[2:end]]
 end
 function ϕ(u)
-    θ = -2.0 .+ 3.0*quantile(Normal(0,1),u[1:4])
-    z = quantile(Normal(0,1),u[5:end])
-    return f(z,θ=θ)
+    θ = -2.0 .+ 3.0*u[1:4]
+    return f(u[5:end],θ=θ)
 end
 
 Euclidean(u;y) = norm(ϕ(u) .- y)
-SampleOne(L) = ϕ(rand(4+L))
-
+SampleOne(L) = rand(Normal(0,1),4+L)
+U(u) = sum(logpdf(Normal(0,1),u))
 function MCMC(N,x0,ϵ;y,δ,L)
     oldx = x0
     Ind = 0
@@ -31,7 +30,7 @@ function MCMC(N,x0,ϵ;y,δ,L)
     for n = 1:N
         newx = oldx .+ PropMove[:,n]
         # newx = rand(MultivariateNormal(oldx,δ^2*Σ))
-        if all(0.0 .< newx .< 1.0)
+        if log(rand(Uniform(0,1))) < U(newx) - U(oldx)
             if Euclidean(newx,y=y) < ϵ
                 oldx = newx
                 Ind += 1
@@ -60,7 +59,7 @@ function SMC(N,y;InitStep=0.1,MinStep=0.1,MinProb=0.2,IterScheme="Adaptive",Init
     ESS = zeros(0)
     ### Simulate Initial particles ###
     for i = 1:N
-        U[1][:,i] = rand(4+L)
+        U[1][:,i] = SampleOne(L)
         DISTANCE[i,1] = Euclidean(U[1][:,i],y=y)
     end
     push!(UniqueParticles,length(unique(DISTANCE[:,1])))
