@@ -1,12 +1,13 @@
 module RW
 using Distributions, LinearAlgebra
 f(z;θ) = θ[1] + θ[2]*(1+0.8*(1-exp(-θ[3]*z))/(1+exp(-θ[3]*z)))*(1+z^2)^θ[4]*z;
+"""
 function ϕ(u)
     θ = 10.0*u[1:4]
     z = quantile(Normal(0,1),u[5:end])
     return f.(z,θ=θ)
 end
-Euclidean(u;y) = norm(ϕ(u) .- y)
+SampleOne(L) = rand(Uniform(0,1),4+L)
 function MCMC(N,u0,ϵ;y,δ,L)
     oldu = u0
     Ind = 0
@@ -16,6 +17,31 @@ function MCMC(N,u0,ϵ;y,δ,L)
     for n = 1:N
         newu = oldu .+ PropMove[:,n]
         if all(0.0 .< newu .< 1)
+            if Euclidean(newu,y=y) < ϵ
+                oldu = newu
+                Ind += 1
+            end
+        end
+    end
+    return (oldu,Ind)
+end
+"""
+function ϕ(u)
+    θ = 10.0*cdf(Normal(0,1),u[1:4])
+    return f.(u[5:end],θ=θ)
+end
+SampleOne(L) = rand(Normal(0,1),4+L)
+Euclidean(u;y) = norm(ϕ(u) .- y)
+U(u) = sum(logpdf(Normal(0,1),u))
+function MCMC(N,u0,ϵ;y,δ,L)
+    oldu = u0
+    Ind = 0
+    d = length(u0)
+    Seed = rand(Normal(0,1),d,N)
+    PropMove = δ * L * Seed
+    for n = 1:N
+        newu = oldu .+ PropMove[:,n]
+        if log(rand(Uniform(0,1))) < U(newu) - U(oldu)
             if Euclidean(newu,y=y) < ϵ
                 oldu = newu
                 Ind += 1
@@ -44,7 +70,7 @@ function SMC(N,y;InitStep=0.1,MaxStep=1.0,MinStep=0.1,MinProb=0.2,IterScheme="Ad
     ESS = zeros(0)
     ### Simulate Initial particles ###
     for i = 1:N
-        U[1][:,i] = rand(Uniform(0,1),L+4)
+        U[1][:,i] = SampleOne(L)
         DISTANCE[i,1] = Euclidean(U[1][:,i],y=y)
     end
     push!(UniqueParticles,length(unique(DISTANCE[:,1])))

@@ -1,21 +1,23 @@
-using Plots: reset_defaults
-using ForwardDiff: derivative
+using ForwardDiff: derivative, gradient
 using JLD2, Plots, StatsPlots, Distributions, Random, LinearAlgebra
+
 theme(:ggplot2)
 function ϕ(u)
     θ = 10.0*u[1:4]
     z = quantile(Normal(0,1),u[5:end])
     return f.(z,θ=θ)
 end
-function f(u;θ)
-    z = quantile(Normal(0,1),u)
+function f(z;θ)
     return θ[1] + θ[2]*(1+0.8*(1-exp(-θ[3]*z))/(1+exp(-θ[3]*z)))*(1+z^2)^(θ[4])*z
 end
-
+Euclidean(u;y) = norm(ϕ(u) .- y)
 Random.seed!(123)
 θ0 = [3.0,1.0,2.0,0.5];
-u0 = rand(100)
-ystar = f.(u0,θ=θ0)
+u0 = rand(100) 
+z0 = quantile(Normal(0,1),u0)
+ystar = f.(z0,θ=θ0)
+
+grad(u) = normalize(gradient(u->Euclidean(u,y=ystar),u))
 include("src/RW.jl")
 include("src/MCMC.jl")
 
@@ -23,6 +25,11 @@ R,alpha = RWM(10000,1.0*I,0.2)
 Σ = cov(R)
 R,alpha = RWM(100000,Σ,0.2)
 
+
+R = RW.SMC(5000,ystar,η = 0.8)
+Index = findall(R.WEIGHT[:,end] .> 0)
+X = R.U[end][:,Index]
+density(10*cdf(Normal(0,1),X[1,:]))
 
 @load "data/100data_RW5000Particles1.jld2"
 R = Results
@@ -45,6 +52,8 @@ for n = 1:length(R3.U)
 end
 current()
 
+density!(10*cdf(Normal(0,1),X[i,:]),label="",linewidth=5.0,color=:yellow)
+
 @load "data/100data_RW2000Particles1.jld2"
 
 R20data = reset_defaults
@@ -54,3 +63,6 @@ for n = 2:length(R20data.U)
     density!(10*R20data.U[n][i,:],label="",color=:darkolivegreen);
 end
 current()
+
+plot(log.(R.EPSILON))
+

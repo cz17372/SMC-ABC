@@ -6,7 +6,7 @@ using JLD2, Plots
 using ForwardDiff:gradient
 theme(:ggplot2)
 include("DelMoralABCSMC.jl")
-include("RW2.jl")
+include("RW.jl")
 function f(u;θ)
     θ = exp.(θ)
     N = length(u) ÷ 2
@@ -72,5 +72,33 @@ for n = 2:size(data)[1]
 end
 for n = 1:size(data)[1]
     plot!(data[n,51:end],label="",color=:grey,linewidth=0.1)
+end
+current()
+
+i = 3
+@load "data/100data_RW5000Particles1_LV.jld2"
+Results.Information
+density(3*Results.U[1][i,:] .- 2.0,label="",color=:darkolivegreen);
+for n = 2:length(Results.U)
+    density!(3*Results.U[n][i,:] .- 2.0,label="",color=:darkolivegreen);
+end
+@load "data/100data_RW5000Particles2_LV.jld2"
+Results.Information
+for n = 1:length(Results.U)
+    density!(3*Results.U[n][i,:] .- 2.0,label="",color=:red);
+end
+@load "data/100data_RW5000Particles_LV3.jld2"
+Results.Information
+for n = 1:length(Results.U)
+    density!(3*Results.U[n][i,:] .- 2.0,label="",color=:blue);
+end
+current()
+
+i = 4
+@load "data/100data_RW10000Particles1_LV.jld2"
+Results.Information
+density(3*Results.U[1][i,:] .- 2.0,label="",color=:darkolivegreen);
+for n = 2:length(Results.U)
+    density!(3*Results.U[n][i,:] .- 2.0,label="",color=:darkolivegreen);
 end
 current()
