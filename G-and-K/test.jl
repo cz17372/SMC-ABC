@@ -26,10 +26,10 @@ R,alpha = RWM(10000,1.0*I,0.2)
 R,alpha = RWM(100000,Σ,0.2)
 
 
-R = RW.SMC(5000,ystar,η = 0.8)
+R = RW.SMC(5000,ystar,η = 0.8,MinStep=0.0,MinProb=0.4)
 Index = findall(R.WEIGHT[:,end] .> 0)
 X = R.U[end][:,Index]
-density(10*cdf(Normal(0,1),X[1,:]))
+density(10*cdf(Normal(0,1),X[4,:]))
 
 @load "data/100data_RW5000Particles1.jld2"
 R = Results
@@ -66,3 +66,4 @@ current()
 
 plot(log.(R.EPSILON))
 
+plot(R.StepSize)
