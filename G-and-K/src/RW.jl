@@ -25,6 +25,7 @@ function MCMC(N,u0,ϵ;y,δ,L)
     end
     return (oldu,Ind)
 end
+
 """
 function ϕ(u)
     θ = 10.0*cdf(Normal(0,1),u[1:4])
@@ -50,6 +51,7 @@ function MCMC(N,u0,ϵ;y,δ,L)
     end
     return (oldu,Ind)
 end
+
 function SMC(N,y;InitStep=0.1,MaxStep=1.0,MinStep=0.1,MinProb=0.2,IterScheme="Adaptive",InitIter=5,PropParMoved=0.99,TolScheme="unique",η=0.9,TerminalTol=1.0,TerminalProb=0.01)
     ### Initialisation ###
     L = length(y)
@@ -129,6 +131,6 @@ function SMC(N,y;InitStep=0.1,MaxStep=1.0,MinStep=0.1,MinProb=0.2,IterScheme="Ad
         println("The step size used in the next SMC iteration is ",StepSize[end])
         print("\n\n")
     end
-    (U=U,EPSILON=EPSILON,DISTANCE=DISTANCE,WEIGHT=WEIGHT,ANCESTOR=ANCESTOR,AcceptanceProb=AcceptanceProb,K=K[1:end-1],StepSize=StepSize[1:end-1],time=timevec,ESS=ESS,UniqueParticles=UniqueParticles,UniqueStartingPoints=UniqueStartingPoints)
+    return (U=U,EPSILON=EPSILON,DISTANCE=DISTANCE,WEIGHT=WEIGHT,ANCESTOR=ANCESTOR,AcceptanceProb=AcceptanceProb,K=K[1:end-1],StepSize=StepSize[1:end-1],time=timevec,ESS=ESS,UniqueParticles=UniqueParticles,UniqueStartingPoints=UniqueStartingPoints) 
 end
 end

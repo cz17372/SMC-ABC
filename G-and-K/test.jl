@@ -18,6 +18,7 @@ z0 = quantile(Normal(0,1),u0)
 ystar = f.(z0,θ=θ0)
 
 grad(u) = normalize(gradient(u->Euclidean(u,y=ystar),u))
+
 include("src/RW.jl")
 include("src/MCMC.jl")
 
@@ -26,9 +27,10 @@ R,alpha = RWM(10000,1.0*I,0.2)
 R,alpha = RWM(100000,Σ,0.2)
 
 
-R = RW.SMC(5000,ystar,η = 0.8,MinStep=0.0,MinProb=0.4)
+R = RW.SMC(5000,ystar,η = 0.8,InitStep=0.1,MinStep=0.0,MinProb=0.2,TerminalTol=1.0)
 Index = findall(R.WEIGHT[:,end] .> 0)
 X = R.U[end][:,Index]
+density(10*X[4,:])
 density(10*cdf(Normal(0,1),X[4,:]))
 
 @load "data/100data_RW5000Particles1.jld2"
@@ -67,3 +69,22 @@ current()
 plot(log.(R.EPSILON))
 
 plot(R.StepSize)
+
+R = load("data/S100data_RW5000ParticlesNew.jld2","Results")
+function PlotBatchRes(R,i;color=:grey,linewidth=0.1,newplot=true,size=(400,400),xlabel="",ylabel="",label="")
+    if newplot
+        density(R.U[1][i,:],color=color,linewidth=linewidth,size=size,xlabel=xlabel,ylabel=ylabel,label=label)
+        for n = 2:length(R.U)
+            density!(R.U[n][i,:],color=color,linewidth=linewidth,label="")
+        end
+        current()
+    else
+        density!(R.U[1][i,:],color=color,linewidth=linewidth,label=label)
+        for n = 2:length(R.U)
+            density!(R.U[n][i,:],color=color,linewidth=linewidth,label="")
+        end
+        current()
+    end
+end
+
+PlotBatchRes(R,1,color=:black)
