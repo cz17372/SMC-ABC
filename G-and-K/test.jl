@@ -17,6 +17,8 @@ u0 = rand(100)
 z0 = quantile(Normal(0,1),u0)
 ystar = f.(z0,θ=θ0)
 
+
+
 grad(u) = normalize(gradient(u->Euclidean(u,y=ystar),u))
 
 include("src/RW.jl")
