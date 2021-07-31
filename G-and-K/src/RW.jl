@@ -104,8 +104,8 @@ function SMC(N,y;InitStep=0.1,MaxStep=1.0,MinStep=0.1,MinProb=0.2,IterScheme="Ad
         push!(U,zeros(4+L,N)); 
         DISTANCE = hcat(DISTANCE,zeros(N));
         ### ABC-MCMC exploration for alive particles 
-        #v = @timed Threads.@threads for i = 1:length(index)
-        v = @timed for i = 1:length(index)
+        #v = @timed for i = 1:length(index)
+        v = @timed Threads.@threads for i = 1:length(index)
             U[t+1][:,index[i]],IndividualAcceptedNum[index[i]] = MCMC(K[t],U[t][:,ANCESTOR[index[i],t]],EPSILON[t+1],y=y,δ=StepSize[end],L=A)
             DISTANCE[index[i],t+1] = Euclidean(U[t+1][:,index[i]],y=y)
         end

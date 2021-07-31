@@ -36,7 +36,7 @@ function SliceSampling(x0;ϵ,ϕ,w)
     end
 end
 
-function RESMC(N,θstar;y,η,TerminalTol,w0,PrintRes=false)
+function RESMC(N,θstar;y,η,TerminalTol,Threshold,w0=1.0,PrintRes=false)
     ϕ(x) = norm(g(x,θ=θstar) .- y)
     L = length(y)
     X = Array{Matrix{Float64},1}(undef,0)
@@ -58,6 +58,9 @@ function RESMC(N,θstar;y,η,TerminalTol,w0,PrintRes=false)
         push!(EPSILON,max(quantile(DISTANCE[:,t-1],η),TerminalTol))
         Index = findall(DISTANCE[:,t-1] .<= EPSILON[t])
         push!(PVec,log.(length(Index)/N))
+        if sum(PVec) < Threshold
+            break
+        end
         RIndex = sample(Index,N,replace=true)
         push!(X,zeros(L,N))
         DISTANCE = hcat(DISTANCE,zeros(N))
@@ -81,3 +84,44 @@ function RESMC(N,θstar;y,η,TerminalTol,w0,PrintRes=false)
     return (PVec=PVec,X=X,AveNum=AveNum,WVec=WVec,DISTANCE=DISTANCE)
 end
 
+function PMMH(θ0,M,N;y,ϵ,η,δ,Σ)
+    theta = zeros(M+1,length(θ0))
+    theta[1,:] = θ0
+    llkvec = zeros(M+1)
+    NumVec = zeros(M+1)
+    R = RESMC(N,theta[1,:],y=y,η=η,TerminalTol=ϵ,Threshold=-Inf)
+    llkvec[1] = sum(R.PVec)
+    NumVec[1] = sum(R.AveNum * N)
+    Accept = 0
+    for n = 2:(M+1)
+        println(n)
+        newθ = rand(MultivariateNormal(theta[n-1,:],δ^2*Σ))
+        if all(0.0 .< newθ .< 10.0)
+            u = rand(Uniform(0,1))
+            thres = log(u)+llkvec[n-1]
+            R = RESMC(N,newθ,y=y,η=η,TerminalTol=ϵ,Threshold=thres)
+            if sum(R.PVec) < thres
+                theta[n,:] = theta[n-1,:]
+                llkvec[n]  = llkvec[n-1]
+                NumVec[n] = sum(R.AveNum * N)
+            else
+                theta[n,:] = newθ
+                llkvec[n]  = sum(R.PVec)
+                NumVec[n]  = sum(R.AveNum * N)
+                Accept += 1
+            end
+        else
+            theta[n,:] = theta[n-1,:]
+            llkvec[n]  = llkvec[n-1]
+        end
+    end
+    return (theta=theta,NumVec = NumVec, llkvec=llkvec, Accprob = Accept/M)
+end
+
+
+
+R = PMMH(θ0,1000,2000,y=ystar,ϵ=1.0,η=0.5,δ=0.1,Σ=Σ)
+
+plot(R.theta[:,4])
+
+load("data/100")

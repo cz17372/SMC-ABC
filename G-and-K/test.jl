@@ -13,7 +13,7 @@ end
 Euclidean(u;y) = norm(ϕ(u) .- y)
 Random.seed!(123)
 θ0 = [3.0,1.0,2.0,0.5];
-u0 = rand(100) 
+u0 = rand(20) 
 z0 = quantile(Normal(0,1),u0)
 ystar = f.(z0,θ=θ0)
 
