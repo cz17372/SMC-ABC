@@ -80,15 +80,15 @@ function SMC(N,y;InitStep=0.1,MaxStep=1.0,MinStep=0.1,MinProb=0.2,IterScheme="Ad
     push!(ESS,1/sum(WEIGHT[:,end].^2))
     EPSILON[1] = findmax(DISTANCE[:,1])[1]
     t = 0
-    while (AcceptanceProb[end] > TerminalProb) & (EPSILON[end] > TerminalTol)
+    while AcceptanceProb[end] > TerminalProb
         t += 1
         ### Resampling Step ###
         ANCESTOR = hcat(ANCESTOR,vcat(fill.(1:N,rand(Multinomial(N,WEIGHT[:,t])))...));
         ### Choose Next Tolerance According to the Input Scheme ###
         if TolScheme == "unique"
-            push!(EPSILON,quantile(unique(DISTANCE[ANCESTOR[:,t],t]),η))
+            push!(EPSILON,max(quantile(unique(DISTANCE[ANCESTOR[:,t],t]),η),TerminalTol))
         elseif TolScheme == "ess"
-            push!(EPSILON,quantile(DISTANCE[ANCESTOR[:,t],t],η))
+            push!(EPSILON,max(quantile(DISTANCE[ANCESTOR[:,t],t],η),TerminalTol))
         end
         ### Calculate the weight for the next iteration
         WEIGHT = hcat(WEIGHT,(DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1])/sum(DISTANCE[ANCESTOR[:,t],t] .< EPSILON[t+1]))
@@ -104,7 +104,8 @@ function SMC(N,y;InitStep=0.1,MaxStep=1.0,MinStep=0.1,MinProb=0.2,IterScheme="Ad
         push!(U,zeros(4+L,N)); 
         DISTANCE = hcat(DISTANCE,zeros(N));
         ### ABC-MCMC exploration for alive particles 
-        v = @timed Threads.@threads for i = 1:length(index)
+        #v = @timed Threads.@threads for i = 1:length(index)
+        v = @timed for i = 1:length(index)
             U[t+1][:,index[i]],IndividualAcceptedNum[index[i]] = MCMC(K[t],U[t][:,ANCESTOR[index[i],t]],EPSILON[t+1],y=y,δ=StepSize[end],L=A)
             DISTANCE[index[i],t+1] = Euclidean(U[t+1][:,index[i]],y=y)
         end
@@ -130,6 +131,9 @@ function SMC(N,y;InitStep=0.1,MaxStep=1.0,MinStep=0.1,MinProb=0.2,IterScheme="Ad
         println("Average Acceptance Probability is ", AcceptanceProb[t])
         println("The step size used in the next SMC iteration is ",StepSize[end])
         print("\n\n")
+        if EPSILON[end] == TerminalTol
+            break
+        end
     end
     return (U=U,EPSILON=EPSILON,DISTANCE=DISTANCE,WEIGHT=WEIGHT,ANCESTOR=ANCESTOR,AcceptanceProb=AcceptanceProb,K=K[1:end-1],StepSize=StepSize[1:end-1],time=timevec,ESS=ESS,UniqueParticles=UniqueParticles,UniqueStartingPoints=UniqueStartingPoints) 
 end

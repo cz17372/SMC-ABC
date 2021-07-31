@@ -29,7 +29,7 @@ R,alpha = RWM(10000,1.0*I,0.2)
 R,alpha = RWM(100000,Σ,0.2)
 
 
-R = RW.SMC(5000,ystar,η = 0.8,InitStep=0.1,MinStep=0.0,MinProb=0.2,TerminalTol=1.0)
+R = RW.SMC(2000,ystar,η = 0.8,InitStep=0.1,MinStep=0.1,MinProb=0.2,TerminalTol=1.0)
 Index = findall(R.WEIGHT[:,end] .> 0)
 X = R.U[end][:,Index]
 density(10*X[4,:])
