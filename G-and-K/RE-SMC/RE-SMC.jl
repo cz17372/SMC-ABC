@@ -125,3 +125,10 @@ R = PMMH(θ0,1000,2000,y=ystar,ϵ=1.0,η=0.5,δ=0.1,Σ=Σ)
 plot(R.theta[:,4])
 
 load("data/100")
+
+X = R.theta
+Vec = Array{Any,1}(undef,1000)
+for n = 1:1000
+    Vec[n] = X[n,:]
+end
+effective_sample_size(Vec)
