@@ -25,7 +25,6 @@ function MCMC(N,u0,ϵ;y,δ,L)
     end
     return (oldu,Ind)
 end
-
 """
 function ϕ(u)
     θ = 10.0*cdf(Normal(0,1),u[1:4])

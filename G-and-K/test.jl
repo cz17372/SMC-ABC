@@ -29,7 +29,7 @@ R,alpha = RWM(10000,1.0*I,0.2)
 R,alpha = RWM(100000,Σ,0.2)
 
 
-R = RW.SMC(10000,ystar,η = 0.8,InitStep=0.3,MinStep=0.1,MinProb=0.2,TerminalTol=0.2)
+R = RW.SMC(10000,ystar,η = 0.8,InitStep=0.3,MinStep=0.1,MinProb=0.2,TerminalTol=1.0)
 Index = findall(R.WEIGHT[:,end] .> 0)
 X = R.U[end][:,Index]
 theta= 10*cdf(Normal(0,1),X[1:4,:])
