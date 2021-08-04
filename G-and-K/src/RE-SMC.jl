@@ -1,6 +1,8 @@
 module RESMC
 
 using Distributions, Plots, StatsPlots, Random, LinearAlgebra, JLD2
+using TimerOutputs
+
 f(z;θ) = θ[1] + θ[2]*(1+0.8*(1-exp(-θ[3]*z))/(1+exp(-θ[3]*z)))*(1+z^2)^θ[4]*z;
 function g(x;θ)
     z = quantile(Normal(0,1),x)
@@ -38,6 +40,7 @@ function SliceSampling(x0;ϵ,ϕ,w)
     end
 end
 
+
 function SMC(N,θstar;y,TerminalTol,η=0.5,Threshold=-Inf,w0=1.0,PrintRes=false)
     ϕ(x) = norm(g(x,θ=θstar) .- y)
     L = length(y)
@@ -70,7 +73,7 @@ function SMC(N,θstar;y,TerminalTol,η=0.5,Threshold=-Inf,w0=1.0,PrintRes=false)
             println("SMC Step: ",t-1)
             println("EPSILON = ",EPSILON[t-1]," w = ",WVec[end])
         end
-        Threads.@threads for i = 1:N
+        for i = 1:N
             X[t][:,i],NumVec[i],ZVec[i] = SliceSampling(X[t-1][:,RIndex[i]],ϵ=EPSILON[t-1],ϕ=ϕ,w=WVec[end])
             DISTANCE[i,t] = ϕ(X[t][:,i])
         end

@@ -51,7 +51,7 @@ function MCMC(N,u0,ϵ;y,δ,L)
     return (oldu,Ind)
 end
 
-function SMC(N,y;InitStep=0.1,MaxStep=1.0,MinStep=0.1,MinProb=0.2,IterScheme="Adaptive",InitIter=5,PropParMoved=0.99,TolScheme="unique",η=0.9,TerminalTol=1.0,TerminalProb=0.01)
+function SMC(N,y;InitStep=0.1,MaxStep=1.0,MinStep=0.1,MinProb=0.2,IterScheme="Adaptive",InitIter=5,PropParMoved=0.99,TolScheme="unique",η=0.9,TerminalTol=1.0,TerminalProb=0.01,GarbageCollect = true)
     ### Initialisation ###
     L = length(y)
     U = Array{Matrix{Float64},1}(undef,0)
@@ -82,7 +82,8 @@ function SMC(N,y;InitStep=0.1,MaxStep=1.0,MinStep=0.1,MinProb=0.2,IterScheme="Ad
     while AcceptanceProb[end] > TerminalProb
         t += 1
         ### Resampling Step ###
-        ANCESTOR = hcat(ANCESTOR,vcat(fill.(1:N,rand(Multinomial(N,WEIGHT[:,t])))...));
+        ANCESTOR = hcat(ANCESTOR,zeros(Int64,N))
+        ANCESTOR[:,t] = sample(findall(WEIGHT[:,t].>0),N,replace=true)
         ### Choose Next Tolerance According to the Input Scheme ###
         if TolScheme == "unique"
             push!(EPSILON,max(quantile(unique(DISTANCE[ANCESTOR[:,t],t]),η),TerminalTol))
@@ -103,12 +104,14 @@ function SMC(N,y;InitStep=0.1,MaxStep=1.0,MinStep=0.1,MinProb=0.2,IterScheme="Ad
         push!(U,zeros(4+L,N)); 
         DISTANCE = hcat(DISTANCE,zeros(N));
         ### ABC-MCMC exploration for alive particles 
-        #v = @timed for i = 1:length(index)
-        v = @timed Threads.@threads for i = 1:length(index)
+        #v = @timed Threads.@threads for i = 1:length(index)
+        v = @timed for i = 1:length(index)
             U[t+1][:,index[i]],IndividualAcceptedNum[index[i]] = MCMC(K[t],U[t][:,ANCESTOR[index[i],t]],EPSILON[t+1],y=y,δ=StepSize[end],L=A)
             DISTANCE[index[i],t+1] = Euclidean(U[t+1][:,index[i]],y=y)
         end
-        GC.gc()
+        if GarbageCollect
+            GC.gc()
+        end
         push!(UniqueParticles,length(unique(DISTANCE[findall(WEIGHT[:,t+1].>0),t+1])))
         push!(timevec,v.time-v.gctime)
         ### Estimate the acceptance probability for the ABC_MCMC algorithm
