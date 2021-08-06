@@ -9,6 +9,7 @@ py"""
 import numpy as np
 from scipy.stats import chi2
 from scipy.special import gammaln
+
 def fminESS(p, alpha=.05, eps=.05, ess=None):
     crit = chi2.ppf(1 - alpha, p)
     foo = 2. / p
@@ -152,5 +153,7 @@ function transferTheta(R,T)
     X     = transpose(10*cdf(Normal(0,1),R.U[T][1:4,Index]))
     return X
 end
+
+NC(R) = sum(log.(mapslices(x->sum(x.>0),R.WEIGHT,dims=1) / 5000))
 
 end

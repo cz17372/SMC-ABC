@@ -51,7 +51,7 @@ function MCMC(N,u0,ϵ;y,δ,L)
     return (oldu,Ind)
 end
 
-function SMC(N,y;InitStep=0.1,MaxStep=1.0,MinStep=0.1,MinProb=0.2,IterScheme="Adaptive",InitIter=5,PropParMoved=0.99,TolScheme="unique",η=0.9,TerminalTol=1.0,TerminalProb=0.01,GarbageCollect = true)
+function SMC(N,y;InitStep=0.1,MaxStep=1.0,MinStep=0.1,MinProb=0.2,IterScheme="Adaptive",InitIter=5,PropParMoved=0.99,TolScheme="unique",η=0.9,TerminalTol=1.0,TerminalProb=0.01,GarbageCollect = true,MultiThread=true)
     ### Initialisation ###
     L = length(y)
     U = Array{Matrix{Float64},1}(undef,0)
@@ -105,9 +105,16 @@ function SMC(N,y;InitStep=0.1,MaxStep=1.0,MinStep=0.1,MinProb=0.2,IterScheme="Ad
         DISTANCE = hcat(DISTANCE,zeros(N));
         ### ABC-MCMC exploration for alive particles 
         #v = @timed Threads.@threads for i = 1:length(index)
-        v = @timed for i = 1:length(index)
-            U[t+1][:,index[i]],IndividualAcceptedNum[index[i]] = MCMC(K[t],U[t][:,ANCESTOR[index[i],t]],EPSILON[t+1],y=y,δ=StepSize[end],L=A)
-            DISTANCE[index[i],t+1] = Euclidean(U[t+1][:,index[i]],y=y)
+        if MultiThread
+            v = @timed Threads.@threads for i = 1:length(index)
+                U[t+1][:,index[i]],IndividualAcceptedNum[index[i]] = MCMC(K[t],U[t][:,ANCESTOR[index[i],t]],EPSILON[t+1],y=y,δ=StepSize[end],L=A)
+                DISTANCE[index[i],t+1] = Euclidean(U[t+1][:,index[i]],y=y)
+            end
+        else
+            v = @timed for i = 1:length(index)
+                U[t+1][:,index[i]],IndividualAcceptedNum[index[i]] = MCMC(K[t],U[t][:,ANCESTOR[index[i],t]],EPSILON[t+1],y=y,δ=StepSize[end],L=A)
+                DISTANCE[index[i],t+1] = Euclidean(U[t+1][:,index[i]],y=y)
+            end
         end
         if GarbageCollect
             GC.gc()
