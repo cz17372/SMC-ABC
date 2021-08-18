@@ -58,20 +58,21 @@ X = utils.transferTheta(R,length(R.U))
 plot(X[:,3])
 
 density(X[:,1])
-v = @timed RESMC.PMMH(θ0,2000,1000,y=ystar,ϵ=1.0,Σ=cov(X),MT=false)
+v = @timed R = RESMC.PMMH(θ0,2000,50,y=ystar,ϵ=20.00,Σ=cov(X),MT=true,η=0.5)
 v.time - v.gctime
 
 utils.ESS(v.value.theta)
 
-plot(v.value.theta[:,1])
+plot(v.value.theta[:,2])
+density(v.value.theta[:,4])
 
 
-
-epsilon = 1.0
+epsilon = 20.0
 v = @timed R = RW.SMC(5000,ystar,η=0.9,TerminalTol=epsilon,GarbageCollect=false,TolScheme="ess")
 v.time - v.gctime
 X = utils.transferTheta(R,length(R.U))
-utils.NC(R)
+
+log(utils.NC(R)*20/0.9/log(0.9))
 
 
 ind = zeros(5000000)

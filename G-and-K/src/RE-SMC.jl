@@ -60,7 +60,7 @@ function SMC(N,θstar;y,TerminalTol,η=0.5,Threshold=-Inf,w0=1.0,PrintRes=false,
     t = 1
     while EPSILON[end] >= TerminalTol
         t += 1
-        push!(EPSILON,max(quantile(DISTANCE[:,t-1],η),TerminalTol))
+        push!(EPSILON,max(quantile(unique(DISTANCE[:,t-1]),η),TerminalTol))
         Index = findall(DISTANCE[:,t-1] .<= EPSILON[t])
         push!(PVec,log.(length(Index)/N))
         if sum(PVec) < Threshold
@@ -71,17 +71,15 @@ function SMC(N,θstar;y,TerminalTol,η=0.5,Threshold=-Inf,w0=1.0,PrintRes=false,
         DISTANCE = hcat(DISTANCE,zeros(N))
         if PrintRes
             println("SMC Step: ",t-1)
-            println("EPSILON = ",EPSILON[t-1]," w = ",WVec[end])
+            println("EPSILON = ",EPSILON[t]," w = ",WVec[end])
         end
         if MT
             Threads.@threads for i = 1:N
-                println(i)
-                X[t][:,i],NumVec[i],ZVec[i] = SliceSampling(X[t-1][:,RIndex[i]],ϵ=EPSILON[t-1],ϕ=ϕ,w=WVec[end])
+                X[t][:,i],NumVec[i],ZVec[i] = SliceSampling(X[t-1][:,RIndex[i]],ϵ=EPSILON[t],ϕ=ϕ,w=WVec[end])
                 DISTANCE[i,t] = ϕ(X[t][:,i])
             end
         else
             for i = 1:N
-                println(i)
                 X[t][:,i],NumVec[i],ZVec[i] = SliceSampling(X[t-1][:,RIndex[i]],ϵ=EPSILON[t-1],ϕ=ϕ,w=WVec[end])
                 DISTANCE[i,t] = ϕ(X[t][:,i])
             end
@@ -95,10 +93,10 @@ function SMC(N,θstar;y,TerminalTol,η=0.5,Threshold=-Inf,w0=1.0,PrintRes=false,
             break
         end
     end
-    return (PVec=PVec,X=X,AveNum=AveNum,WVec=WVec,DISTANCE=DISTANCE)
+    return (PVec=PVec,X=X,AveNum=AveNum,WVec=WVec,DISTANCE=DISTANCE,EPSILON=EPSILON)
 end
 
-function PMMH(θ0,M,N;y,ϵ,Σ,η=0.5,δ=2.562/4,MT=true)
+function PMMH(θ0,M,N;y,ϵ,Σ,η=0.5,δ=2.562/4,MT=true,PR=false)
     theta = zeros(M+1,length(θ0))
     theta[1,:] = θ0
     llkvec = zeros(M+1)
@@ -112,7 +110,7 @@ function PMMH(θ0,M,N;y,ϵ,Σ,η=0.5,δ=2.562/4,MT=true)
         if all(0.0 .< newθ .< 10.0)
             u = rand(Uniform(0,1))
             thres = log(u)+llkvec[n-1]
-            R = SMC(N,newθ,y=y,η=η,TerminalTol=ϵ,Threshold=thres,MT=MT)
+            R = SMC(N,newθ,y=y,η=η,TerminalTol=ϵ,Threshold=thres,MT=MT,PrintRes=PR)
             if sum(R.PVec) < thres
                 theta[n,:] = theta[n-1,:]
                 llkvec[n]  = llkvec[n-1]
