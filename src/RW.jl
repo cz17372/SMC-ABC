@@ -1,8 +1,8 @@
 module RW
 using Distributions, LinearAlgebra
-U(x) = sum(logpdf(Normal(0,1),x))
 
-function MCMC(N,u0,ϵ;y,δ,L,ϕ)
+
+function MCMC(N,u0,ϵ;y,δ,L,mod::Module)
     oldu = u0
     Ind = 0
     d = length(u0)
@@ -10,8 +10,8 @@ function MCMC(N,u0,ϵ;y,δ,L,ϕ)
     PropMove = δ * L * Seed
     for n = 1:N
         newu = oldu .+ PropMove[:,n]
-        if log(rand(Uniform(0,1))) < U(newu) - U(oldu)
-            if norm(ϕ(newu) .- y) < ϵ
+        if log(rand(Uniform(0,1))) < mod.U(newu) - mod.U(oldu)
+            if norm(mod.ϕ(newu) .- y) < ϵ
                 oldu = newu
                 Ind += 1
             end
@@ -21,7 +21,7 @@ function MCMC(N,u0,ϵ;y,δ,L,ϕ)
 end
 
 
-function SMC(N,y,L,ϕ,Dist;InitStep=0.1,MaxStep=1.0,MinStep=0.1,MinProb=0.2,IterScheme="Adaptive",InitIter=5,PropParMoved=0.99,TolScheme="unique",η=0.9,TerminalTol=1.0,TerminalProb=0.01,MultiThread=true,gc = true)
+function SMC(N::Integer,y::Vector,L::Integer,mod::Module,Dist;InitStep=0.1,MaxStep=1.0,MinStep=0.1,MinProb=0.2,IterScheme="Adaptive",InitIter=5,PropParMoved=0.99,TolScheme="unique",η=0.9,TerminalTol=1.0,TerminalProb=0.01,MultiThread=true,gc = true)
     ### Initialisation ###
     U = Array{Matrix{Float64},1}(undef,0)
     push!(U,zeros(L,N))
@@ -39,8 +39,8 @@ function SMC(N,y,L,ϕ,Dist;InitStep=0.1,MaxStep=1.0,MinStep=0.1,MinProb=0.2,Iter
     ESS = zeros(0)
     ### Simulate Initial particles ###
     for i = 1:N
-        U[1][:,i] = rand(Normal(0,1),L)
-        DISTANCE[i,1] = Dist(ϕ(U[1][:,i]),y)
+        U[1][:,i] = mod.genseed(L)
+        DISTANCE[i,1] = Dist(mod.ϕ(U[1][:,i]),y)
     end
     push!(UniqueParticles,length(unique(DISTANCE[:,1])))
     WEIGHT[:,1] .= 1.0/N
@@ -74,13 +74,13 @@ function SMC(N,y,L,ϕ,Dist;InitStep=0.1,MaxStep=1.0,MinStep=0.1,MinProb=0.2,Iter
         ### ABC-MCMC exploration for alive particles 
         if MultiThread
             v = Threads.@threads for i = 1:length(index)
-                U[t+1][:,index[i]],IndividualAcceptedNum[index[i]] = MCMC(K[t],U[t][:,ANCESTOR[index[i],t]],EPSILON[t+1],y=y,δ=StepSize[end],L=A,ϕ=ϕ)
-                DISTANCE[index[i],t+1] = Dist(ϕ(U[t+1][:,index[i]]),y)
+                U[t+1][:,index[i]],IndividualAcceptedNum[index[i]] = MCMC(K[t],U[t][:,ANCESTOR[index[i],t]],EPSILON[t+1],y=y,δ=StepSize[end],L=A,mod=mod)
+                DISTANCE[index[i],t+1] = Dist(mod.ϕ(U[t+1][:,index[i]]),y)
             end
         else
             v = for i = 1:length(index)
-                U[t+1][:,index[i]],IndividualAcceptedNum[index[i]] = MCMC(K[t],U[t][:,ANCESTOR[index[i],t]],EPSILON[t+1],y=y,δ=StepSize[end],L=A,ϕ=ϕ)
-                DISTANCE[index[i],t+1] = Dist(ϕ(U[t+1][:,index[i]]),y)
+                U[t+1][:,index[i]],IndividualAcceptedNum[index[i]] = MCMC(K[t],U[t][:,ANCESTOR[index[i],t]],EPSILON[t+1],y=y,δ=StepSize[end],L=A,mod=mod)
+                DISTANCE[index[i],t+1] = Dist(mod.ϕ(U[t+1][:,index[i]]),y)
             end
         end
         if gc
@@ -89,6 +89,7 @@ function SMC(N,y,L,ϕ,Dist;InitStep=0.1,MaxStep=1.0,MinStep=0.1,MinProb=0.2,Iter
         push!(UniqueParticles,length(unique(DISTANCE[findall(WEIGHT[:,t+1].>0),t+1])))
         ### Estimate the acceptance probability for the ABC_MCMC algorithm
         push!(AcceptanceProb,mean(IndividualAcceptedNum[index])/K[end])
+        println("Average Acceptance Probability is ", AcceptanceProb[end])
         if IterScheme=="Adaptive"
             push!(K,Int64(ceil(log(1-PropParMoved)/log(1-AcceptanceProb[end]))))
         elseif IterScheme == "Fixed"
@@ -103,7 +104,7 @@ function SMC(N,y,L,ϕ,Dist;InitStep=0.1,MaxStep=1.0,MinStep=0.1,MinProb=0.2,Iter
             push!(StepSize,StepSize[end])
         end
         """
-        println("Average Acceptance Probability is ", AcceptanceProb[t])
+        
         println("The step size used in the next SMC iteration is ",StepSize[end])
         print("\n\n")
         if EPSILON[end] == TerminalTol
