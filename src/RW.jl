@@ -2,7 +2,7 @@ module RW
 using Distributions, LinearAlgebra
 
 
-function MCMC(N,u0,ϵ;y,δ,L,mod::Module)
+function MCMC(N,u0,ϵ;y,δ,L,mod::Module,Dist)
     oldu = u0
     Ind = 0
     d = length(u0)
@@ -11,7 +11,7 @@ function MCMC(N,u0,ϵ;y,δ,L,mod::Module)
     for n = 1:N
         newu = oldu .+ PropMove[:,n]
         if log(rand(Uniform(0,1))) < mod.U(newu) - mod.U(oldu)
-            if norm(mod.ϕ(newu) .- y) < ϵ
+            if Dist(mod.ϕ(newu),y) < ϵ
                 oldu = newu
                 Ind += 1
             end
@@ -74,7 +74,7 @@ function SMC(N::Integer,y::Vector,L::Integer,mod::Module,Dist;InitStep=0.1,MaxSt
         ### ABC-MCMC exploration for alive particles 
         if MultiThread
             v = Threads.@threads for i = 1:length(index)
-                U[t+1][:,index[i]],IndividualAcceptedNum[index[i]] = MCMC(K[t],U[t][:,ANCESTOR[index[i],t]],EPSILON[t+1],y=y,δ=StepSize[end],L=A,mod=mod)
+                U[t+1][:,index[i]],IndividualAcceptedNum[index[i]] = MCMC(K[t],U[t][:,ANCESTOR[index[i],t]],EPSILON[t+1],y=y,δ=StepSize[end],L=A,mod=mod,Dist=Dist)
                 DISTANCE[index[i],t+1] = Dist(mod.ϕ(U[t+1][:,index[i]]),y)
             end
         else
@@ -96,7 +96,7 @@ function SMC(N::Integer,y::Vector,L::Integer,mod::Module,Dist;InitStep=0.1,MaxSt
             push!(K,InitIter)
         end
         ### Tune the step size ### 
-        push!(StepSize,min(MaxStep,max(MinStep,exp(log(StepSize[end]) + 0.5*(AcceptanceProb[end] - MinProb)))))
+        push!(StepSize,min(MaxStep,max(MinStep,exp(log(StepSize[end]) + (AcceptanceProb[end] - MinProb)))))
         """
         if StepSize[end] > MinStep
             push!(StepSize,exp(log(StepSize[end]) + 0.5*(AcceptanceProb[end] - MinProb)))
