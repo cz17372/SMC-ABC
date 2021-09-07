@@ -29,26 +29,48 @@ R = RW.SMC(10000,ystar,length(ystar)+4,gkn,Dist,TerminalTol=0.5,η = 0.8,gc=fals
 
 Index = findall(R.WEIGHT[:,end] .> 0)
 U = R.U[end][:,findall(R.WEIGHT[:,end] .> 0)]
+
+Cov1 = cov(U[1:4,:],dims=2)
+Cov2 = cov(U[5:end,:],dims=2)
+Cov = cov(U,dims=2)
+Cov1
 transform(x) = 10*U
 X = 10*cdf(Normal(0,1),U[1:4,:])
 density(X[1,:])
 
-y = mapslices(gkn.ϕ,U,dims=1)
-y = mapslices(sort,y,dims=1)
-#plot(sort(ystar),linewidth=1,color=:red,label="");
-scatter(sort(ystar),markerstrokewidth=0,color=:red,makersize=2,label="");
-for i = 1:length(ystar)
-    plot!([i,i],[sort(y[i,:])[1],sort(y[i,:])[end]],label="",color=:green,linewidth=1.5);
-end
-current()
 
-Index = findall(R.WEIGHT[:,end] .> 0)
-U = R.U[end][:,findall(R.WEIGHT[:,end] .> 0)]
-transform(x) = 10*U
-X = 10*cdf(Normal(0,1),U[1:4,:])
-y = mapslices(gkn.ϕ,U,dims=1)
-scatter(ystar,markerstrokewidth=0,color=:red,makersize=2,label="");
-for i = 1:length(ystar)
-    plot!([i,i],[sort(y[i,:])[1],sort(y[i,:])[end]],label="",color=:green,linewidth=1.5);
+
+u0 = U[:,1]
+
+Dist(gkn.ϕ(u0),ystar)
+
+u1 = [rand(MultivariateNormal(u0[1:4],0.1*Cov1));u0[5:end]]
+u2 = rand(MultivariateNormal(u0,0.1*cov(U,dims=2)))
+
+Dist(gkn.ϕ(u2),ystar)
+
+ind = 0
+dist = 0.0
+for i = 1:size(U)[2]
+    u0 = U[:,i]
+    u1 = [rand(MultivariateNormal(u0[1:4],0.1*Cov1));rand(MultivariateNormal(u0[5:end],0.1*Cov2))]
+    dist += norm(u1 .- u0)
+    if Dist(gkn.ϕ(u1),ystar) < 0.5
+        ind += 1
+    end
 end
-current()
+
+ind/size(U)[2]
+dist/size(U)[2]
+
+ind = 0
+dist = 0.0
+for i = 1:size(U)[2]
+    u0 = U[:,i]
+    u1 = rand(MultivariateNormal(u0,0.1*cov(U,dims=2)))
+    dist += norm(u1 .- u0)
+    if Dist(gkn.ϕ(u1),ystar) < 0.5
+        ind += 1
+    end
+end
+
