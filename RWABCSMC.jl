@@ -1,15 +1,15 @@
-using Distributions, Random, LinearAlgebra, Plots, StatsPlots
-include("src/RW.jl")
-include("src/RESMC.jl")
-include("src/gkn.jl")
+using Distributions, Random, LinearAlgebra
+
 include("src/gku.jl")
+include("src/gkn.jl")
+include("src/RW.jl")
+include("src/utils.jl")
 
 θstar = [3.0,1.0,2.0,0.5]
 Random.seed!(123)
 ystar = gkn.ConSimulator(20,θstar)
 
 Dist(x,y) = norm(x .- y)
-
 function SumDist(x,y)
     Ex = quantile(x,collect(1/8:1/8:1))
     Ey = quantile(y,collect(1/8:1/8:1))
@@ -23,15 +23,12 @@ function SumDist(x,y)
     Sy[4] = (Ey[7]-Ey[5]+Ey[3]-Ey[1])/Sy[2]
     return norm(Sx .- Sy)
 end
-
 Dist2(x,y) = norm(sort(x) .- sort(y))
-R = RW.SMC(5000,ystar,length(ystar)+4,gkn,Dist,TerminalTol=10.0,η = 0.8,gc=false,TerminalProb=0.0,MinStep=0.1)
-utils.RWSMC_CompCost(R)
 
+Tolerances = [25,20,15,10,5,2,1,0.5]
+CompCostVec = zeros(8)
+for i = 1:8
+    R = RW.SMC(10000,ystar,length(ystar)+4,gkn,Dist,TerminalTol=Tolerances[i],η = 0.8,gc=false,TerminalProb=0.015,MinStep=0.1)
+    CompCostVec[i] = utils.RWSMC_CompCost(R)
+end
 
-Index = findall(R.WEIGHT[:,end].>0); U = R.U[end][1:4,Index]; X = 10*cdf(Normal(0,1),U)
-Σ = cov(X,dims=2)
-
-R2 = RESMC.PMMH(θstar,2000,10000,y=ystar,model=gku,Dist=Dist,ϵ=10.0,Σ=Σ)
-
-plot(R2.theta[:,1])

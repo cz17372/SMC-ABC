@@ -32,5 +32,9 @@ function genseed(N)
     return rand(N)
 end
 
+function g(u,θ)
+    z = quantile(Normal(0,1),u)
+    return f.(z,Ref(θ))
+end
 
 end

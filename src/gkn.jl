@@ -26,5 +26,8 @@ function genseed(N)
     return randn(N)
 end
 
+function g(u,θ)
+    return f.(u,Ref(θ))
+end
 
 end
