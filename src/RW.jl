@@ -21,7 +21,7 @@ function MCMC(N,u0,ϵ;y,δ,L,mod::Module,Dist)
 end
 
 
-function SMC(N::Integer,y::Vector,L::Integer,mod::Module,Dist;InitStep=0.1,MaxStep=1.0,MinStep=0.1,MinProb=0.2,IterScheme="Adaptive",InitIter=5,PropParMoved=0.99,TolScheme="unique",η=0.9,TerminalTol=1.0,TerminalProb=0.01,MultiThread=true,gc = true)
+function SMC(N::Integer,y::Vector,L::Integer,mod::Module,Dist;InitStep=0.2,MaxStep=1.0,MinStep=0.1,MinProb=0.2,IterScheme="Adaptive",InitIter=5,PropParMoved=0.99,TolScheme="unique",η=0.9,TerminalTol=1.0,TerminalProb=0.01,MultiThread=true,gc = true)
     ### Initialisation ###
     U = Array{Matrix{Float64},1}(undef,0)
     push!(U,zeros(L,N))
@@ -96,7 +96,7 @@ function SMC(N::Integer,y::Vector,L::Integer,mod::Module,Dist;InitStep=0.1,MaxSt
             push!(K,InitIter)
         end
         ### Tune the step size ### 
-        push!(StepSize,min(MaxStep,max(MinStep,exp(log(StepSize[end]) + (AcceptanceProb[end] - MinProb)))))
+        push!(StepSize,min(MaxStep,max(MinStep,exp(log(StepSize[end]) + 0.5*(AcceptanceProb[end] - MinProb)))))
         """
         if StepSize[end] > MinStep
             push!(StepSize,exp(log(StepSize[end]) + 0.5*(AcceptanceProb[end] - MinProb)))
