@@ -25,22 +25,17 @@ function SumDist(x,y)
 end
 
 Dist2(x,y) = norm(sort(x) .- sort(y))
-R = RW.SMC(10000,ystar,length(ystar)+4,gkn,Dist,TerminalTol=0.5,η = 0.8,gc=false,TerminalProb=0.0,MinStep=0.1)
+R = RW.SMC(10000,ystar,length(ystar)+4,gkn,Dist,TerminalTol=0.3,η = 0.8,gc=false,TerminalProb=0.0,MinStep=0.1)
 
 Index = findall(R.WEIGHT[:,end] .> 0)
 U = R.U[end][:,findall(R.WEIGHT[:,end] .> 0)]
 
-Cov1 = cov(U[1:4,:],dims=2)
-Cov2 = cov(U[5:end,:],dims=2)
-Cov = cov(U,dims=2)
-Cov1
-transform(x) = 10*U
 X = 10*cdf(Normal(0,1),U[1:4,:])
-density(X[1,:])
+density(X[3,:])
 
 
 
-u0 = U[:,1]
+u0 = U[:,4]
 
 Dist(gkn.ϕ(u0),ystar)
 
