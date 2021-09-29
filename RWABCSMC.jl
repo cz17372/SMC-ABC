@@ -32,3 +32,16 @@ for i = 1:8
     CompCostVec[i] = utils.RWSMC_CompCost(R)
 end
 
+R = RW.SMC(10000,ystar,length(ystar)+4,gkn,Dist,TerminalTol=Tolerances[end],η = 0.8,gc=false,TerminalProb=0.015,MinStep=0.1)
+
+using JLD2
+
+@save "RWABCSMCCompCost.jld2" CompCostVec
+@save "data/RWABCSMC/Results.jld2" R
+
+using KernelDensity
+
+a = kde(X[2,:])
+
+plot(a)
+

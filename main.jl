@@ -26,6 +26,8 @@ function SumDist(x,y)
 end
 
 Dist2(x,y) = norm(sort(x) .- sort(y))
-R = RW.SMC(5000,ystar,length(ystar)+4,gkn,Dist,TerminalTol=10.0,η = 0.8,gc=false,TerminalProb=0.0,MinStep=0.1)
+R = RW.SMC(10000,ystar,length(ystar)+4,gkn,Dist,TerminalTol=0.5,η = 0.8,gc=false,TerminalProb=0.0,MinStep=0.1)
 utils.RWSMC_CompCost(R)
-
+Index = findall(R.WEIGHT[:,end] .> 0); X = 10*cdf(Normal(0,1),R.U[end][1:4,Index])
+Σ = cov(X,dims=2)
+R2 = RESMC.PMMH(θstar,2000,10000,y=ystar,model=gku,Dist=Dist,ϵ=0.5,Σ=Σ)
