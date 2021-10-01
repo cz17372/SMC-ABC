@@ -125,6 +125,7 @@ function PMMH(θ0,M,N;y,model,Dist,ϵ,Σ,η=0.5,δ=2.562/4,MT=true,PR=false)
     end
     return (theta=theta,NumVec = NumVec, llkvec=llkvec, Accprob = Accept/M)
 end
+
 end
 
 
