@@ -1,6 +1,6 @@
 using Distributions, Random, LinearAlgebra, Plots, StatsPlots
 theme(:ggplot2)
-include("src/RW.jl")
+include("src/RWSMC.jl")
 include("src/RESMC.jl")
 include("src/gkn.jl")
 include("src/gku.jl")
@@ -30,4 +30,4 @@ R = RW.SMC(10000,ystar,length(ystar)+4,gkn,Dist,TerminalTol=0.5,η = 0.8,gc=fals
 utils.RWSMC_CompCost(R)
 Index = findall(R.WEIGHT[:,end] .> 0); X = 10*cdf(Normal(0,1),R.U[end][1:4,Index])
 Σ = cov(X,dims=2)
-R2 = RESMC.PMMH(θstar,2000,10000,y=ystar,model=gku,Dist=Dist,ϵ=0.5,Σ=Σ)
+R2 = RESMC.PMMH(θstar,2000,10000,y=ystar,model=gku,Dist=Dist,ϵ=10.0,Σ=Σ)

@@ -1,3 +1,4 @@
+module MCMC
 using Distributions, Roots
 using ForwardDiff: derivative
 using ProgressMeter
@@ -26,15 +27,21 @@ function RWM(N,Σ,σ;y=ystar,θ0=rand(Uniform(0,10),4))
     AcceptanceProb = 0
     @showprogress 1 "Computing.." for t = 2:N
         theta_proposal = rand(MultivariateNormal(Output[t-1,:],σ*Σ))
-        log_alpha = min(0,RWM_logPrior(theta_proposal)-RWM_logPrior(Output[t-1,:]) + 
-            sum(log_likelihood.(y,θ=theta_proposal))-sum(log_likelihood.(y,θ=Output[t-1,:])))
-        logu = log(rand(Uniform(0,1)))
-        if logu < log_alpha
-            Output[t,:] = theta_proposal
-            AcceptanceProb += 1
-        else
+        if RWM_logPrior(theta_proposal) == -Inf
             Output[t,:] = Output[t-1,:]
+        else
+            log_alpha = min(0,RWM_logPrior(theta_proposal)-RWM_logPrior(Output[t-1,:]) + 
+                sum(log_likelihood.(y,θ=theta_proposal))-sum(log_likelihood.(y,θ=Output[t-1,:])))
+            logu = log(rand(Uniform(0,1)))
+            if logu < log_alpha
+                Output[t,:] = theta_proposal
+                AcceptanceProb += 1
+            else
+                Output[t,:] = Output[t-1,:]
+            end
         end
     end
     return (Sample=Output,AcceptanceProb=AcceptanceProb/(N-1))
+end
+
 end
