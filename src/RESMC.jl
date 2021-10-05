@@ -2,10 +2,7 @@ module RESMC
 using Distributions, Random, LinearAlgebra
 
 function r(y)
-    m = rem(y,2)
-    if m < 0
-        m += 2
-    end
+    m = mod(y,2.0)
     if m < 1
         return m
     else
@@ -13,7 +10,7 @@ function r(y)
     end
 end
 
-function SliceSampling(x0;ϵ,ϕ,w)
+function SliceSampling(x0;ϵ,w,Dist,θ,model,y)
     # sample velocity
     v = rand(Normal(0,1),length(x0))
     u = rand(Uniform(0,w)); a = -u; b= w-u
@@ -22,7 +19,7 @@ function SliceSampling(x0;ϵ,ϕ,w)
         z = rand(Uniform(a,b))
         x1 = r.(x0 .+ z*v)
         NoSteps += 1
-        if ϕ(x1) < ϵ
+        if Dist(model.g(x1,θ),y) < ϵ
             return (x1,NoSteps,abs(z))
         else
             if z < 0.0
@@ -34,8 +31,7 @@ function SliceSampling(x0;ϵ,ϕ,w)
     end
 end
 
-function SMC(N,θstar;y,TerminalTol,g,Dist,η=0.5,Threshold=-Inf,w0=1.0,PrintRes=false,MT = true)
-    ϕ(x) = Dist(g(x,θstar),y)
+function SMC(N,θstar;y,TerminalTol,model,Dist,η=0.5,Threshold=-Inf,w0=1.0,PrintRes=false,MT = true)
     L = length(y)
     X = Array{Matrix{Float64},1}(undef,0)
     push!(X,zeros(L,N))
@@ -48,7 +44,7 @@ function SMC(N,θstar;y,TerminalTol,g,Dist,η=0.5,Threshold=-Inf,w0=1.0,PrintRes
     AveNum = zeros(0)
     for i = 1:N
         X[1][:,i] = rand(L)
-        DISTANCE[i,1] = ϕ(X[1][:,i])
+        DISTANCE[i,1] = Dist(model.g(X[1][:,i],θstar),y)
     end
     t = 1
     while EPSILON[end] >= TerminalTol
@@ -68,13 +64,13 @@ function SMC(N,θstar;y,TerminalTol,g,Dist,η=0.5,Threshold=-Inf,w0=1.0,PrintRes
         end
         if MT
             Threads.@threads for i = 1:N
-                X[t][:,i],NumVec[i],ZVec[i] = SliceSampling(X[t-1][:,RIndex[i]],ϵ=EPSILON[t],ϕ=ϕ,w=WVec[end])
-                DISTANCE[i,t] = ϕ(X[t][:,i])
+                X[t][:,i],NumVec[i],ZVec[i] = SliceSampling(X[t-1][:,RIndex[i]],ϵ=EPSILON[t],w=WVec[end],Dist=Dist,θ=θstar,model=model,y=y)
+                DISTANCE[i,t] = Dist(model.g(X[t][:,i],θstar),y)
             end
         else
             for i = 1:N
-                X[t][:,i],NumVec[i],ZVec[i] = SliceSampling(X[t-1][:,RIndex[i]],ϵ=EPSILON[t-1],ϕ=ϕ,w=WVec[end])
-                DISTANCE[i,t] = ϕ(X[t][:,i])
+                X[t][:,i],NumVec[i],ZVec[i] = SliceSampling(X[t-1][:,RIndex[i]],ϵ=EPSILON[t],w=WVec[end],Dist=Dist,θ=θstar,model=model,y=y)
+                DISTANCE[i,t] = Dist(model.g(X[t][:,i],θstar),y)
             end
         end
         push!(AveNum,mean(NumVec))
