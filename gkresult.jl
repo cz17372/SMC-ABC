@@ -46,7 +46,7 @@ Index = findall(RWSMC50.WEIGHT[:,end] .> 0)
 X = 10*cdf(Normal(0,1),RWSMC50.U[end][1:4,Index])
 Σ = cov(X,dims=2)
 MCMC50,alpha  = MCMC.RWM(100000,Σ,0.2,y=ystar)
-RESMC20 = RESMC.PMMH(θstar,2000,5000,y=ystar,model=gku,Dist=Dist,ϵ=0.5,Σ=Σ,η=0.8)
+RESMC20 = RESMC.PMMH(θstar,2000,5000,y=ystar,model=gku,Dist=Dist,ϵ=0.5,Σ=Σ)
 
 Random.seed!(4013)
 ystar = gkn.ConSimulator(100,θstar)

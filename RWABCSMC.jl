@@ -51,12 +51,12 @@ for i = 1:8
     R = RESMC.PMMH(θstar,2000,5000,y=ystar,model=gku,Dist=Dist,ϵ=Tolerances[i],Σ=Σ)
     CompCostVec20RESMC[i] = sum(R.NumVec)/2000
 end
-RWSMC20 = RWSMC.SMC(10000,ystar,length(ystar)+4,gkn,Dist,TerminalTol=0.5,η = 0.8,gc=true,TerminalProb=0.01,MinStep=0.1)
+RWSMC20 = RWSMC.SMC(10000,ystar,length(ystar)+4,gkn,Dist,TerminalTol=1.0,η = 0.8,gc=true,TerminalProb=0.01,MinStep=0.1)
 SMC20 = ABCSMC.SMC(10000,ystar,gkn,Dist,TerminalTol=0.5,TerminalProb=0.01,η=0.8,MinStep=0.1)
 Index = findall(RWSMC20.WEIGHT[:,end] .> 0)
 X = 10*cdf(Normal(0,1),RWSMC20.U[end][1:4,Index])
 Σ = cov(X,dims=2)
-RESMC20 = RESMC.PMMH(θstar,2000,5000,y=ystar,model=gku,Dist=Dist,ϵ=0.5,Σ=Σ,η=0.8)
+RESMC20 = RESMC.PMMH(θstar,2000,5000,y=ystar,model=gku,Dist=Dist,ϵ=5.0,Σ=Σ,η=0.8)
 plot(RESMC20.theta[:,1])
 MCMC20,alpha  = MCMC.RWM(100000,Σ,0.2,y=ystar)
 plot(MCMC20[:,4])
@@ -98,8 +98,12 @@ for i = 1:8
     end
 end
 
-RWSMC50 = RWSMC.SMC(10000,ystar,length(ystar)+4,gkn,Dist,TerminalTol=0.5,η = 0.8,gc=true,TerminalProb=0.015,MinStep=0.1)
-SMC50 = ABCSMC.SMC(10000,ystar,gkn,Dist,TerminalTol=0.5,TerminalProb=0.01,η=0.8)
+RWSMC50 = RWSMC.SMC(5000,ystar,length(ystar)+4,gkn,Dist,TerminalTol=0.5,η = 0.8,gc=true,TerminalProb=0.015,MinStep=0.1)
+SMC50 = ABCSMC.SMC(5000,ystar,gkn,Dist,TerminalTol=0.5,TerminalProb=0.01,η=0.8)
+Index = findall(RWSMC50.WEIGHT[:,end] .> 0)
+X = 10*cdf(Normal(0,1),RWSMC50.U[end][1:4,Index])
+Σ = cov(X,dims=2)
+MCMC50,alpha  = MCMC.RWM(100000,Σ,0.2,y=ystar)
 
 
 Random.seed!(4013)
@@ -121,6 +125,45 @@ for i = 1:8
     end
 end
 
-RWSMC100 = RWSMC.SMC(10000,ystar,length(ystar)+4,gkn,Dist,TerminalTol=0.5,η = 0.9,gc=true,TerminalProb=0.015,MinStep=0.1)
+RWSMC100 = RWSMC.SMC(5000,ystar,length(ystar)+4,gkn,Dist,TerminalTol=0.5,η = 0.9,gc=true,TerminalProb=0.015,MinStep=0.1)
 SMC100 = ABCSMC.SMC(10000,ystar,gkn,Dist,TerminalTol=0.5,TerminalProb=0.01)
+Index = findall(RWSMC100.WEIGHT[:,end] .> 0)
+X = 10*cdf(Normal(0,1),RWSMC100.U[end][1:4,Index])
+Σ = cov(X,dims=2)
+MCMC100,alpha  = MCMC.RWM(100000,Σ,0.5,y=ystar)
 
+
+
+function plotres(RWSMC,SMC,MCMC)
+    Index = findall(RWSMC.WEIGHT[:,end].>0)
+    RWSMCX = 10*cdf(Normal(0,1),RWSMC.U[end][1:4,Index])
+    Index = findall(SMC.WEIGHT[:,end] .> 0)
+    SMCX  = SMC.U[end][:,Index]
+    RWSMCepsilon = round(RWSMC.EPSILON[end],digits=3)
+    SMCepsilon = round(SMC.EPSILON[end],digits=3)
+    p1 = density(MCMC[50001:end,1],label="MCMC",color=:grey,linewidth=2.0,xlabel="a",ylabel="Density",size=(600,600))
+    density!(RWSMCX[1,:],label="RW-ABC-SMC,epsilon=$(RWSMCepsilon)",color=:green,linewidth=2)
+    density!(SMCX[1,:],label="ABC-SMC,epsilon=$(SMCepsilon)",color=:blue,linewidth=2)
+    vline!([3.0],label="",color=:red,linewidth=2.0)
+    p2 = density(MCMC[50001:end,2],label="MCMC",color=:grey,linewidth=2.0,xlabel="b",ylabel="Density")
+    density!(RWSMCX[2,:],label="RW-ABC-SMC,epsilon=$(RWSMCepsilon)",color=:green,linewidth=2)
+    density!(SMCX[2,:],label="ABC-SMC,epsilon=$(SMCepsilon)",color=:blue,linewidth=2)
+    vline!([1.0],label="",color=:red,linewidth=2.0)
+    p3 = density(MCMC[50001:end,3],label="MCMC",color=:grey,linewidth=2.0,xlabel="g",ylabel="Density")
+    density!(RWSMCX[3,:],label="RW-ABC-SMC,epsilon=$(RWSMCepsilon)",color=:green,linewidth=2)
+    density!(SMCX[3,:],label="ABC-SMC,epsilon=$(SMCepsilon)",color=:blue,linewidth=2)
+    vline!([2.0],label="",color=:red,linewidth=2.0)
+    p4 = density(MCMC[50001:end,4],label="MCMC",color=:grey,linewidth=2.0,xlabel="k",ylabel="Density")
+    density!(RWSMCX[4,:],label="RW-ABC-SMC,epsilon=$(RWSMCepsilon)",color=:green,linewidth=2)
+    density!(SMCX[4,:],label="ABC-SMC,epsilon=$(SMCepsilon)",color=:blue,linewidth=2)
+    vline!([0.5],label="",color=:red,linewidth=2.0)
+    return [p1,p2,p3,p4]
+end
+
+plotres(RWSMC50,SMC50,MCMC50)
+savefig("50datares.pdf")
+
+scatter(RWSMC20.K,label="20 data",color=:grey,markersize=2,xlabel="Iteration",ylabel="Average number of MCMC steps",markerstrokewidth=0)
+scatter!(RWSMC50.K,label="50,data",color=:green,markersize=2,markerstrokewidth=0)
+scatter!(RWSMC100.K,label="100 data",color=:blue,markersize=2,markerstrokewidth=0)
+savefig("MCMCsteps.pdf")
