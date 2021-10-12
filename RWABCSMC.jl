@@ -51,7 +51,7 @@ for i = 1:8
     R = RESMC.PMMH(θstar,2000,5000,y=ystar,model=gku,Dist=Dist,ϵ=Tolerances[i],Σ=Σ)
     CompCostVec20RESMC[i] = sum(R.NumVec)/2000
 end
-RWSMC20 = RWSMC.SMC(10000,ystar,length(ystar)+4,gkn,Dist,TerminalTol=1.0,η = 0.8,gc=true,TerminalProb=0.01,MinStep=0.1)
+RWSMC20 = RWSMC.SMC(10000,ystar,length(ystar)+4,gkn,Dist,TerminalTol=5.0,η = 0.8,gc=true,TerminalProb=0.01,MinStep=0.1)
 SMC20 = ABCSMC.SMC(10000,ystar,gkn,Dist,TerminalTol=0.5,TerminalProb=0.01,η=0.8,MinStep=0.1)
 Index = findall(RWSMC20.WEIGHT[:,end] .> 0)
 X = 10*cdf(Normal(0,1),RWSMC20.U[end][1:4,Index])

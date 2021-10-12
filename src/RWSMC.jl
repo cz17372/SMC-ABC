@@ -2,7 +2,7 @@ module RWSMC
 using Distributions, LinearAlgebra
 
 
-function MCMC(N,u0,ϵ;y,δ,L,mod::Module,Dist)
+function MCMC(N,u0,ϵ;y,δ,L,model::Module,Dist)
     oldu = u0
     Ind = 0
     d = length(u0)
@@ -10,8 +10,8 @@ function MCMC(N,u0,ϵ;y,δ,L,mod::Module,Dist)
     PropMove = δ * L * Seed
     for n = 1:N
         newu = oldu .+ PropMove[:,n]
-        if log(rand(Uniform(0,1))) < mod.U(newu) - mod.U(oldu)
-            if Dist(mod.ϕ(newu),y) < ϵ
+        if log(rand(Uniform(0,1))) < model.U(newu) - model.U(oldu)
+            if Dist(model.Ψ(newu),y) < ϵ
                 oldu = newu
                 Ind += 1
             end
@@ -21,7 +21,7 @@ function MCMC(N,u0,ϵ;y,δ,L,mod::Module,Dist)
 end
 
 
-function SMC(N::Integer,y::Vector,L::Integer,mod::Module,Dist;InitStep=0.2,MaxStep=1.0,MinStep=0.1,MinProb=0.2,IterScheme="Adaptive",InitIter=5,PropParMoved=0.99,TolScheme="unique",η=0.9,TerminalTol=1.0,TerminalProb=0.01,Parallel=true,gc = true)
+function SMC(N::Integer,y::Vector,L::Integer,model::Module,Dist;InitStep=0.2,MaxStep=1.0,MinStep=0.1,MinProb=0.2,IterScheme="Adaptive",InitIter=5,PropParMoved=0.99,TolScheme="unique",η=0.9,TerminalTol=1.0,TerminalProb=0.01,Parallel=true,gc = true)
     ### Initialisation ###
     U = Array{Matrix{Float64},1}(undef,0)
     push!(U,zeros(L,N))
@@ -39,8 +39,8 @@ function SMC(N::Integer,y::Vector,L::Integer,mod::Module,Dist;InitStep=0.2,MaxSt
     ESS = zeros(0)
     ### Simulate Initial particles ###
     for i = 1:N
-        U[1][:,i] = mod.genseed(L)
-        DISTANCE[i,1] = Dist(mod.ϕ(U[1][:,i]),y)
+        U[1][:,i] = model.GenSeed(L)
+        DISTANCE[i,1] = Dist(model.Ψ(U[1][:,i]),y)
     end
     push!(UniqueParticles,length(unique(DISTANCE[:,1])))
     WEIGHT[:,1] .= 1.0/N
@@ -74,13 +74,13 @@ function SMC(N::Integer,y::Vector,L::Integer,mod::Module,Dist;InitStep=0.2,MaxSt
         ### ABC-MCMC exploration for alive particles 
         if Parallel
             v = Threads.@threads for i = 1:length(index)
-                U[t+1][:,index[i]],IndividualAcceptedNum[index[i]] = MCMC(K[t],U[t][:,ANCESTOR[index[i],t]],EPSILON[t+1],y=y,δ=StepSize[end],L=A,mod=mod,Dist=Dist)
-                DISTANCE[index[i],t+1] = Dist(mod.ϕ(U[t+1][:,index[i]]),y)
+                U[t+1][:,index[i]],IndividualAcceptedNum[index[i]] = MCMC(K[t],U[t][:,ANCESTOR[index[i],t]],EPSILON[t+1],y=y,δ=StepSize[end],L=A,model=model,Dist=Dist)
+                DISTANCE[index[i],t+1] = Dist(model.Ψ(U[t+1][:,index[i]]),y)
             end
         else
             v = for i = 1:length(index)
-                U[t+1][:,index[i]],IndividualAcceptedNum[index[i]] = MCMC(K[t],U[t][:,ANCESTOR[index[i],t]],EPSILON[t+1],y=y,δ=StepSize[end],L=A,mod=mod)
-                DISTANCE[index[i],t+1] = Dist(mod.ϕ(U[t+1][:,index[i]]),y)
+                U[t+1][:,index[i]],IndividualAcceptedNum[index[i]] = MCMC(K[t],U[t][:,ANCESTOR[index[i],t]],EPSILON[t+1],y=y,δ=StepSize[end],L=A,model=model)
+                DISTANCE[index[i],t+1] = Dist(mod.Ψ(U[t+1][:,index[i]]),y)
             end
         end
         if gc
