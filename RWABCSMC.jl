@@ -167,3 +167,48 @@ scatter(RWSMC20.K,label="20 data",color=:grey,markersize=2,xlabel="Iteration",yl
 scatter!(RWSMC50.K,label="50,data",color=:green,markersize=2,markerstrokewidth=0)
 scatter!(RWSMC100.K,label="100 data",color=:blue,markersize=2,markerstrokewidth=0)
 savefig("MCMCsteps.pdf")
+
+include("src/lvn.jl")
+Random.seed!(12345)
+logθ = log.([0.4,0.005,0.05,0.001])
+u = randn(100)
+ystar = lvn.ϕ(u,logθ)
+
+R = RWSMC.SMC(10000,ystar,4+length(ystar),lvn,Dist,η=0.8,TerminalTol=5.0)
+Index = findall(R.WEIGHT[:,end] .> 0)
+X = R.U[end][1:4,Index] .- 2.0
+
+density(X[1,:]);vline!([log(0.4)])
+
+include("src/mgn.jl")
+Random.seed!(17372)
+θ = [0.1,4,5]
+u = randn(40)
+ystar = mgn.ϕ(u,θ)
+R = RWSMC.SMC(10000,ystar,3+length(ystar),mgn,Dist,η=0.8,TerminalTol=0.1)
+
+function convert(U)
+    D,N = size(U)
+    X = zeros(D,N)
+    X[1,:] = cdf(Normal(0,1),U[1,:])/3
+    X[2,:] = 10*cdf(Normal(0,1),U[2,:])
+    X[3,:] = X[2,:] .+ 10*cdf(Normal(0,1),U[3,:])
+    return X
+end
+
+Index = findall(R.WEIGHT[:,end].>0)
+U = R.U[end][1:3,Index]
+X = convert(U)
+density(X[3,:])
+
+theme(:ggplot2)
+p1 = density(X[1,:],label="",color=:grey,linewidth=2.0,xlims=(0,0.3),size=(600,600),xlabel="theta_1")
+vline!([0.1],color=:red,label="",linewidth=2.0)
+p2 = density(X[2,:],label="",color=:grey,linewidth=2.0,size=(600,600),xlabel="theta_2")
+vline!([4.0],color=:red,label="",linewidth=2.0)
+
+p3 = density(X[3,:],label="",color=:grey,linewidth=2.0,size=(600,600),xlabel="theta_3")
+vline!([5.0],color=:red,label="",linewidth=2.0)
+
+plot(p1,p2,p3,layout=(1,3),size=(1800,600))
+savefig("MG1.pdf")
