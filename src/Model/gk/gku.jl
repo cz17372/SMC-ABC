@@ -1,6 +1,7 @@
 module gku
 using Distributions, LinearAlgebra
-pardim = 4
+NoParam = 4
+
 f(z,θ) = θ[1] + θ[2]*(1+0.8*(1-exp(-θ[3]*z))/(1+exp(-θ[3]*z)))*(1+z^2)^θ[4]*z;
 
 """

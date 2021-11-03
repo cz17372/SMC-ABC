@@ -86,7 +86,8 @@ function SMC(N,θstar;y,TerminalTol,model,Dist,η=0.5,Threshold=-Inf,w0=1.0,Prin
     return (PVec=PVec,X=X,AveNum=AveNum,WVec=WVec,DISTANCE=DISTANCE,EPSILON=EPSILON)
 end
 
-function PMMH(θ0,M,N;y,model,Dist,ϵ,Σ,η=0.5,δ=2.562/4,MT=true,PR=false)
+function PMMH(θ0,M,N;y,model,Dist,ϵ,Σ,η=0.5,MT=true,PR=false)
+    δ = 2.562/model.NoParam
     theta = zeros(M+1,length(θ0))
     theta[1,:] = θ0
     llkvec = zeros(M+1)

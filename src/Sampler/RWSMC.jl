@@ -21,8 +21,9 @@ function MCMC(N,u0,ϵ;y,δ,L,model::Module,Dist)
 end
 
 
-function SMC(N::Integer,y::Vector,L::Integer,model::Module,Dist;InitStep=0.2,MaxStep=1.0,MinStep=0.1,MinProb=0.2,IterScheme="Adaptive",InitIter=5,PropParMoved=0.99,TolScheme="unique",η=0.9,TerminalTol=1.0,TerminalProb=0.01,Parallel=true,gc = true)
+function SMC(N::Integer,y::Vector,model::Module,Dist;InitStep=0.2,MaxStep=1.0,MinStep=0.1,MinProb=0.2,IterScheme="Adaptive",InitIter=5,PropParMoved=0.99,TolScheme="unique",η=0.9,TerminalTol=1.0,TerminalProb=0.01,Parallel=true,gc = true)
     ### Initialisation ###
+    L = length(y)+model.NoParam
     U = Array{Matrix{Float64},1}(undef,0)
     push!(U,zeros(L,N))
     EPSILON = zeros(1)

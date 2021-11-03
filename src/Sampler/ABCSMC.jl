@@ -26,7 +26,7 @@ end
 
 function SMC(N,y,model,Dist;InitStep=0.1,MinStep=0.1,MinProb=0.2,IterScheme="Adaptive",InitIter=5,PropParMoved=0.99,TolScheme="unique",η=0.9,TerminalTol=1.0,TerminalProb=0.01,Parallel=true,gc=false)
     L = length(y)
-    pardim = model.pardim
+    pardim = model.NoParam
     # U - particles for the parameters, each coloumn represents one particle
     U = Array{Matrix{Float64},1}(undef,0)
     push!(U,zeros(pardim,N))
