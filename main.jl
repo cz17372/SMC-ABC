@@ -71,6 +71,6 @@ function RESMCsamplerResults(epsvec,M,N,y,model,Dist,θ0)
     return (Chains=MCMCchain,CompCost = CompCost)
 end
 
-eps = [25.0,20.0,15,10,5,2,1,0.5,0.2]
+eps = [25.0,20.0,15,10,5,2]
 
 gk_twentydata_RESMC = RESMCsamplerResults(eps,2000,5000,ystar,gku,Euclidean,θstar)

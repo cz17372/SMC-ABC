@@ -50,7 +50,7 @@ function SMC(N,θstar;y,TerminalTol,model,Dist,η=0.5,Threshold=-Inf,w0=1.0,Prin
     while EPSILON[end] >= TerminalTol
         t += 1
         push!(EPSILON,max(quantile(unique(DISTANCE[:,t-1]),η),TerminalTol))
-        Index = findall(DISTANCE[:,t-1] .<= EPSILON[t])
+        Index = findall(DISTANCE[:,t-1] .< EPSILON[t])
         push!(PVec,log.(length(Index)/N))
         if sum(PVec) < Threshold
             break
