@@ -58,5 +58,8 @@ function ϕ(u,θ)
     return f.(z,Ref(θ))
 end
 
+function transform(x)
+    return 10*x
+end
 
 end
