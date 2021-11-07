@@ -26,22 +26,27 @@ function SMC_CompCost(R)
     end
     return Cost/sum(R.WEIGHT[:,end] .> 0)
 end
-function ABCsamplerResults(epsvec::Vector{Float64},N,ystar,model,Dist)
+
+
+function gkResults(epsvec::Vector{Float64},M,N,ystar,Dist,θ0)
     k = length(epsvec)
     RWSMC_posterior = Array{Any,2}(undef,k,4)
     ABCSMC_posterior = Array{Any,2}(undef,k,4)
+    RESMC_MCMC = Array{Matrix,1}(undef,k)
+    RESMC_CompCost = zeros(k)
     RWSMC_CompCost = zeros(k)
     ABCSMC_CompCost = zeros(k)
     for n = 1:k
         # Perform the RWABCSMC
-        R = RWSMC.SMC(N,ystar,model,Dist,η=0.8,TerminalTol=epsvec[n],TerminalProb=0.01)
+        R = RWSMC.SMC(N,ystar,gkn,Dist,η=0.8,TerminalTol=epsvec[n],TerminalProb=0.01)
         Index = findall(R.WEIGHT[:,end] .> 0)
-        X     = model.transform(R.U[end][1:4,Index])
+        X     = gkn.GetPostSample(R)
         for j = 1:4
             RWSMC_posterior[n,j] = kde(X[j,:])
         end
+        Σ = cov(X,dims=2)
         RWSMC_CompCost[n] = SMC_CompCost(R)
-        R = ABCSMC.SMC(N,ystar,model,Dist,η=0.8,TerminalTol=epsvec[n],TerminalProb=0.0001)
+        R = ABCSMC.SMC(N,ystar,gkn,Dist,η=0.8,TerminalTol=epsvec[n],TerminalProb=0.0001)
         if R.EPSILON[end] == epsvec[n]
             Index = findall(R.WEIGHT[:,end] .> 0)
             X = R.U[end][:,Index]
@@ -52,25 +57,14 @@ function ABCsamplerResults(epsvec::Vector{Float64},N,ystar,model,Dist)
         else
             ABCSMC_CompCost[n] = Inf
         end
+        R = RESMC.PMMH(θ0,M,N,y=ystar,model=gku,Dist=Dist,Σ=Σ,ϵ=epsvec[n])
+        RESMC_MCMC[n] = R.theta
+        RESMC_CompCost[n] = sum(R.NumVec)/M
     end
-    return (Posterior = (RWABCSMC=RWSMC_posterior,ABCSMC=ABCSMC_posterior),CompCost = (RWABCSMC=RWSMC_CompCost,ABCSMC=ABCSMC_CompCost))
-end
-function RESMCsamplerResults(epsvec,M,N,y,model,Dist,θ0)
-    k = length(epsvec)
-    MCMCchain  = Array{Matrix}(undef,k)
-    CompCost = zeros(k)
-    for n = 1:k
-        R = RWSMC.SMC(5000,y,model,Dist,η=0.8,TerminalTol=epsvec[n])
-        Index = findall(R.WEIGHT[:,end] .> 0)
-        X     = model.transform(R.U[end][1:4,Index])
-        Σ = cov(X,dims=2)
-        R = RESMC.PMMH(θ0,M,N,y=y,model=model,Dist=Dist,Σ=Σ,ϵ=epsvec[n])
-        MCMCchain[n] = R.theta
-        CompCost[n] = sum(R.NumVec)/M
-    end
-    return (Chains=MCMCchain,CompCost = CompCost)
+    return (Posterior = (RWABCSMC=RWSMC_posterior,ABCSMC=ABCSMC_posterior,RESMC=RESMC_MCMC),CompCost = (RWABCSMC=RWSMC_CompCost,ABCSMC=ABCSMC_CompCost,RESMC=RESMC_CompCost))
 end
 
-eps = [25.0,20.0,15,10,5,2]
+eps = [25.0,20.0,15,10,5,2,1,0.5,0.2]
+gk_20data = gkResults(eps,2000,5000,ystar,Euclidean,θstar)
 
-gk_twentydata_RESMC = RESMCsamplerResults(eps,2000,5000,ystar,gku,Euclidean,θstar)
+

@@ -58,8 +58,11 @@ function ϕ(u,θ)
     return f.(z,Ref(θ))
 end
 
-function transform(x)
-    return 10*x
+function GetPostSample(R)
+    Index = findall(R.WEIGHT[:,end].>0)
+    U = R.U[end][:,Index]
+    X = 10*U[1:4,:]
+    return X
 end
 
 end

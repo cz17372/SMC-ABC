@@ -41,7 +41,12 @@ function ϕ(u,θ)
     return f.(u,Ref(θ))
 end
 
-function transform(u)
-    return 10*cdf(Normal(0,1),u)
+
+function GetPostSample(R)
+    Index = findall(R.WEIGHT[:,end].>0)
+    U = R.U[end][:,Index]
+    X = 10*cdf(Normal(0,1),U[1:4,:])
+    return X
 end
+ 
 end
