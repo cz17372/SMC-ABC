@@ -92,15 +92,18 @@ function PMMH(θ0,M,N;y,model,Dist,ϵ,Σ,η=0.5,MT=true,PR=false)
     theta[1,:] = θ0
     llkvec = zeros(M+1)
     NumVec = zeros(M+1)
-    R = SMC(N,theta[1,:],y=y,model=model,Dist=Dist,η=η,TerminalTol=ϵ,Threshold=-Inf,PrintRes=PR)
+    time = @timed R = SMC(N,theta[1,:],y=y,model=model,Dist=Dist,η=η,TerminalTol=ϵ,Threshold=-Inf,PrintRes=PR)
+    if time.time > 5.0
+        return "Infeasible"
+    end
     llkvec[1] = sum(R.PVec)
     NumVec[1] = sum(R.AveNum * N)
     Accept = 0
     for n = 2:(M+1)
         newθ = rand(MultivariateNormal(theta[n-1,:],δ^2*Σ))
-        if all(0.0 .< newθ .< 10.0)
+        if model.ptheta(newθ) != -Inf
             u = rand(Uniform(0,1))
-            thres = log(u)+llkvec[n-1]
+            thres = log(u)+llkvec[n-1]+model.ptheta(newθ)-model.ptheta(theta[n-1,:])
             R = SMC(N,newθ,y=y,η=η,model=model,Dist=Dist,TerminalTol=ϵ,Threshold=thres,MT=MT,PrintRes=PR)
             if sum(R.PVec) < thres
                 theta[n,:] = theta[n-1,:]
