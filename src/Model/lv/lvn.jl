@@ -13,7 +13,7 @@ end
 U(u) = sum(logpdf(Normal(0,1),u))
 
 function GenPar()
-    return rand(Normal(μ,σ),pardim)
+    return rand(Normal(μ,σ),NoParam)
 end
 
 function GenSeed(N)

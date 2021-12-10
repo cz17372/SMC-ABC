@@ -1,3 +1,4 @@
 ./julia-1.6.0/bin/julia --threads=12
 git pull https://github.com/cz17372/SMC-ABC.git Test-Ideas
 cd("SMC-ABC")
+include("main.jl")
